@@ -9,6 +9,7 @@
 
 import * as THREE from './vendor/three.module.min.js';
 import { mulberryPlant, mulberryLeaf, PALETTE } from './mulberry.js';
+import { lemonPlant, leafClump, fruitColor, RIPE_AT } from './lemon.js';
 
 const params = new URLSearchParams(location.search);
 const MAP_URL = params.get('map') || '../maps/lang_maker_v1.json';
@@ -108,7 +109,7 @@ function buildFarm(map) {
     m.position.copy(P((x0 + x1) / 2, (y0 + y1) / 2, 0.005)); scene.add(m);
   }
 
-  const trunks = [], leavesLemon = [], leavesMul = [], ripe = [], unripe = [], soil = [], mulberries = [];
+  const trunks = [], leavesLemon = [], leavesMul = [], ripe = [], unripe = [], soil = [], mulberries = [], lemons = [];
   const r = rng(2026);
   for (const row of map.rows || []) {
     const [x0, y0] = row.start, [x1, y1] = row.end;
@@ -118,14 +119,17 @@ function buildFarm(map) {
       const t = n > 1 ? i / (n - 1) : 0;
       const x = x0 + (x1 - x0) * t + (r() - 0.5) * 0.08, y = y0 + (y1 - y0) * t + (r() - 0.5) * 0.08;
       if (row.crop === 'lemon') {
-        const h = 0.95 + r() * 0.25, fr = 0.40 + r() * 0.10;
-        trunks.push({ x, y, h: h - fr * 0.6, r: 0.05 });
-        leavesLemon.push({ x, y, z: h, r: fr });
-        const k = 5 + Math.floor(r() * 5);
-        for (let j = 0; j < k; j++) { // quả nằm trên mặt tán, lệch về nửa dưới
-          const az = r() * Math.PI * 2, el = -0.9 + r() * 1.3;
-          const fx = x + Math.cos(az) * Math.cos(el) * fr, fy = y + Math.sin(az) * Math.cos(el) * fr, fz = h + Math.sin(el) * fr;
-          (r() > 0.35 ? ripe : unripe).push({ x: fx, y: fy, z: fz, r: 0.035 });
+        // chanh: cây thấp hơn dâu, tán tròn sẫm, quả từ xanh ngả vàng theo độ chín
+        const plant = lemonPlant(r, { height: 0.95 + r() * 0.15 });
+        const rot = r() * Math.PI * 2;
+        lemons.push({ x, y, rot, plant });
+        world.obstacles.push({ x, y, r: 0.08 });
+        leavesLemon.push({ x, y, z: plant.crown.y, r: plant.crown.r * 0.95 });
+        const c = Math.cos(rot), sn = Math.sin(rot);
+        for (const f of plant.fruits) { // đổi toạ độ quả từ hệ cục bộ của cây sang hệ ROS
+          const [lx, ly, lz] = f.p; // three cục bộ: x, y lên, z
+          const tx = lx * c + lz * sn, tz = -lx * sn + lz * c; // quay quanh trục đứng
+          (f.ripeness >= RIPE_AT ? ripe : unripe).push({ x: x + tx, y: y - tz, z: ly + 0.06, r: f.r, ripeness: f.ripeness });
         }
       } else { // dâu: gốc đốn thấp, cành xoè, lá hình tim (kiểu vườn dâu BLUESILK)
         const plant = mulberryPlant(r);
@@ -145,15 +149,13 @@ function buildFarm(map) {
   });
   const ball = new THREE.IcosahedronGeometry(1, 1);
   const place = (s, m) => m.compose(P(s.x, s.y, s.z), new THREE.Quaternion(), new THREE.Vector3(s.r, s.r, s.r));
-  instanced(ball, 0x2f6b2c, leavesLemon, place);
   drawMulberries(mulberries);
-  instanced(new THREE.SphereGeometry(1, 10, 8), 0xf3d32b, ripe, place);
-  instanced(new THREE.SphereGeometry(1, 10, 8), 0x8fc43a, unripe, place);
+  drawLemons(lemons);
 
   for (const t of trunks) world.obstacles.push({ x: t.x, y: t.y, r: t.r + 0.03 });
   for (const s of [...leavesLemon, ...leavesMul]) world.foliage.push({ c: P(s.x, s.y, s.z), r: s.r * 0.97 });
-  for (const f of ripe) world.fruits.push({ p: P(f.x, f.y, f.z), r: f.r, cls: 'lemon_ripe' });
-  for (const f of unripe) world.fruits.push({ p: P(f.x, f.y, f.z), r: f.r, cls: 'lemon_unripe' });
+  for (const f of ripe) world.fruits.push({ p: P(f.x, f.y, f.z), r: f.r, cls: 'lemon_ripe', ripeness: f.ripeness });
+  for (const f of unripe) world.fruits.push({ p: P(f.x, f.y, f.z), r: f.r, cls: 'lemon_unripe', ripeness: f.ripeness });
 
   for (const t of map.tags || []) {
     const [x, y] = t.pos;
@@ -203,6 +205,40 @@ function drawMulberries(list) {
     out.compose(new THREE.Vector3(...x.l.p), x.l.q, v.setScalar(x.l.s)).premultiply(x.base));
   fill(new THREE.IcosahedronGeometry(1, 1), mat({ roughness: 0.6 }), fruits.map(x => ({ ...x, color: x.f.color })), (x, out) =>
     out.compose(new THREE.Vector3(...x.f.p), q.identity(), v.set(0.016, 0.027, 0.016)).premultiply(x.base));
+}
+
+// Vẽ cả vườn chanh: cành, 3 biến thể khối lá, quả (màu theo độ chín).
+function drawLemons(list) {
+  if (!list.length) return;
+  const m = new THREE.Matrix4(), base = new THREE.Matrix4(), q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0), d = new THREE.Vector3(), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  const segs = [], clumps = [[], [], []], fruits = [];
+  for (const it of list) {
+    base.compose(P(it.x, it.y, 0.06), q.setFromAxisAngle(up, it.rot), one);
+    for (const g of it.plant.segs) segs.push({ g, base: base.clone(), color: g.color });
+    for (const k of it.plant.clumps) clumps[k.variant].push({ k, base: base.clone(), color: k.color });
+    for (const f of it.plant.fruits) fruits.push({ f, base: base.clone(), color: fruitColor(f.ripeness) });
+  }
+  const mat = opts => new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9, metalness: 0, ...opts });
+  const fill = (geo, material, items, place) => {
+    if (!items.length) return;
+    const mesh = new THREE.InstancedMesh(geo, material, items.length);
+    const c = new THREE.Color();
+    items.forEach((it, i) => { place(it, m); mesh.setMatrixAt(i, m); mesh.setColorAt(i, c.set(it.color)); });
+    scene.add(mesh);
+  };
+  const rod = new THREE.CylinderGeometry(0.7, 1, 1, 5); rod.translate(0, 0.5, 0);
+  fill(rod, mat({}), segs, (x, out) => {
+    const a = new THREE.Vector3(...x.g.p0), b = new THREE.Vector3(...x.g.p1);
+    d.subVectors(b, a); const len = d.length();
+    out.compose(a, new THREE.Quaternion().setFromUnitVectors(up, d.normalize()), v.set(x.g.r0, len, x.g.r0)).premultiply(x.base);
+  });
+  clumps.forEach((items, i) => fill(leafClump(i + 1), mat({ roughness: 0.5 }), items, (x, out) =>
+    out.compose(new THREE.Vector3(...x.k.p), q.identity(), v.setScalar(x.k.s)).premultiply(x.base)));
+  // quả chanh hơi thuôn, nằm nghiêng ngẫu nhiên
+  fill(new THREE.IcosahedronGeometry(1, 1), mat({ roughness: 0.45 }), fruits, (x, out) =>
+    out.compose(new THREE.Vector3(...x.f.p), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), x.f.tilt),
+      v.set(x.f.r, x.f.r * 1.3, x.f.r)).premultiply(x.base));
 }
 
 // ---------------------------------------------------------------- robot
@@ -313,7 +349,7 @@ function fruitLabels() { // nhãn tự động: khung bao từng quả chanh tro
     }
     if (hidden) continue;
     const pr = Math.max(1.5, (fr.r * f) / dist), cx = ((_v.x + 1) / 2) * W, cy = ((1 - _v.y) / 2) * H;
-    out.push({ class: fr.cls, bbox: [+(cx - pr).toFixed(1), +(cy - pr).toFixed(1), +(2 * pr).toFixed(1), +(2 * pr).toFixed(1)], distance: +dist.toFixed(3) });
+    out.push({ class: fr.cls, ripeness: +fr.ripeness.toFixed(2), bbox: [+(cx - pr).toFixed(1), +(cy - pr).toFixed(1), +(2 * pr).toFixed(1), +(2 * pr).toFixed(1)], distance: +dist.toFixed(3) });
   }
   return out;
 }

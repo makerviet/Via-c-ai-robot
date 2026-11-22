@@ -81,6 +81,12 @@ def build(q, out, base_stl, D, base_target=60000, arm_ratio=0.25):
     rm=trimesh.util.concatenate([r,p,f]); rm.visual=trimesh.visual.TextureVisuals(material=mat(COL['riser'],0.4,0.3))
     sc.add_geometry(rm,node_name='riser',geom_name='riser')
     M0=np.eye(4); M0[:3,3]=[MOUNT_X,0,TOP+RISER+0.006+0.0024]
+    if 'xoan' in q:  # tay mềm xoắn thay cho SO-101
+        for name, m, c in spiral_arm(**q['xoan']):
+            m.visual = trimesh.visual.TextureVisuals(material=mat(c, 0.7))
+            sc.add_geometry(m, node_name=name, geom_name=name)
+        sc.apply_transform(trimesh.transformations.rotation_matrix(-np.pi/2,[1,0,0]))
+        sc.export(out); return None, None
     W,P=parts(q, U)
     cache={}
     for i,(link,fn,M,mn) in enumerate(P):
@@ -94,10 +100,56 @@ def build(q, out, base_stl, D, base_target=60000, arm_ratio=0.25):
     sc.export(out)
     allm=trimesh.util.concatenate([g for g in sc.dump()])
     return allm.bounds, {k:(M0@W[k])[:3,3].round(3).tolist() for k in ['shoulder_link','gripper_frame_link']}
+def frustum(r0, r1, h, sides=24):
+    return trimesh.creation.revolve([[0, 0], [r0, 0], [r1, h], [0, h]], sections=sides)
+
+def spiral_arm(curl=0.22, tilt=0.35, n=22, length=0.42, w0=0.05, w1=0.008, lemon=False):
+    """Tay mềm xoắn theo nguyên lý xoắn ốc logarit: mỗi đốt nhỏ hơn đốt trước một tỉ lệ q,
+    kéo cáp thì mọi khớp gập cùng một góc `curl`, nên cả tay cuộn thành đường xoắn ốc logarit.
+    Hình học tự dựng theo nguyên lý trong bài báo SpiRobs, không lấy mã hay bản vẽ của repo khác."""
+    out = []
+    top = TOP + RISER + 0.006
+    box = trimesh.creation.box([0.09, 0.08, 0.06]); box.apply_translation([MOUNT_X + 0.005, 0, top + 0.03])
+    out.append(('hop_keo_cap', box, 0x2F3A2A))  # hộp 3 động cơ cuộn cáp
+    q = (w1 / w0) ** (1 / n)
+    l0 = length * (1 - q) / (1 - q ** n)
+    pos = np.array([MOUNT_X + 0.05, 0.0, top + 0.035]); ang = tilt  # góc so với phương ngang, dương là chếch lên
+    segs = []; cables = [[], [], []]
+    for i in range(n):
+        li, ri, rj = l0 * q ** i, w0 * q ** i / 2, w0 * q ** (i + 1) / 2
+        d = np.array([np.cos(ang), 0, np.sin(ang)])
+        m = frustum(ri, rj, li * 0.86)
+        # trục z của đốt quay theo hướng d
+        R = trimesh.geometry.align_vectors([0, 0, 1], d); R[:3, 3] = pos
+        m.apply_transform(R); segs.append(m)
+        for k in range(3):  # 3 sợi cáp chạy dọc mép đốt
+            a = 2 * np.pi * k / 3
+            off = R[:3, :3] @ np.array([np.cos(a) * ri * 0.8, np.sin(a) * ri * 0.8, 0])
+            cables[k].append(pos + off)
+        pos = pos + d * li; ang -= curl
+    out.append(('tay_xoan', trimesh.util.concatenate(segs), 0xF1ECDD))
+    cab = []
+    for c in cables:
+        for a, b in zip(c[:-1], c[1:]):
+            v = b - a; L = np.linalg.norm(v)
+            if L < 1e-4: continue
+            cy = trimesh.creation.cylinder(radius=0.0012, height=L, sections=6)
+            T = trimesh.geometry.align_vectors([0, 0, 1], v / L); T[:3, 3] = (a + b) / 2; cy.apply_transform(T); cab.append(cy)
+    out.append(('cap_keo', trimesh.util.concatenate(cab), 0x8A5A2B))
+    if lemon:  # quả chanh nằm trong vòng cuộn, treo trên cuống
+        tip = pos
+        ctr = np.mean(np.array([s.centroid for s in segs[n // 3:]]), axis=0)
+        L = trimesh.creation.icosphere(subdivisions=3, radius=1.0); L.apply_scale([0.026, 0.026, 0.032])
+        L.apply_translation(ctr); out.append(('qua_chanh', L, 0xF2D52A))
+        st = trimesh.creation.cylinder(radius=0.0025, height=0.05, sections=6); st.apply_translation(ctr + [0, 0, 0.032 + 0.025])
+        out.append(('cuong_chanh', st, 0x6B5A3E))
+    return out
+
 POSES = {  # góc khớp (rad) cho ba tư thế mẫu
     'via_c_v0_1':     dict(shoulder_lift=-0.25, elbow_flex=0.95, wrist_flex=0.75, gripper=0.15),             # sẵn sàng
     'via_c_v0_1_hai': dict(shoulder_pan=0.25, shoulder_lift=0.55, elbow_flex=-0.2, wrist_flex=0.35, gripper=0.9),  # vươn hái
     'via_c_v0_1_gap': dict(shoulder_lift=-1.7, elbow_flex=1.65, wrist_flex=0.8, gripper=0),                   # gập khi di chuyển
+    'via_c_v0_1_tay_mem': dict(xoan=dict(curl=0.3, tilt=0.75, w0=0.055, lemon=True)),                                  # tay mềm xoắn ôm quả
 }
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)

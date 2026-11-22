@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VIA C phần cứng v0.1</title>
+<link rel="icon" href="favicon.png">
+<style>
+  html,body{margin:0;height:100%;background:#f4eedb;font-family:system-ui,sans-serif;overflow:hidden}
+  #hud{position:absolute;left:16px;top:16px;background:rgba(255,255,255,.85);border-radius:10px;padding:10px 14px;max-width:340px;font-size:14px;line-height:1.45;color:#2d3a24}
+  #hud b{font-size:15px} #hud img{width:28px;vertical-align:middle;margin-right:6px}
+  #hud small{color:#5f6b55}
+</style>
+</head>
+<body>
+<div id="hud"><img src="favicon.png" alt=""><b>VIA C · phần cứng v0.1</b><br>
+Đế 2 bánh (bản v2.0) · cột nâng 12 cm · tay SO-101 6 bậc.<br>
+<small>Kéo chuột để xoay, cuộn để phóng to. Phím 1 sẵn sàng, 2 vươn hái, 3 gập.</small></div>
+<script type="module">
+import * as THREE from './vendor/three.module.min.js';
+import { GLTFLoader } from './vendor/GLTFLoader.js';
+import { OrbitControls } from './vendor/OrbitControls.js';
+import { attachArm, POSES } from './so101.js';
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setPixelRatio(devicePixelRatio); r.setSize(innerWidth, innerHeight);
+r.shadowMap.enabled = true; document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xf4eedb);
+const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.01, 20);
+const view = new URLSearchParams(location.search).get('view') || 'quarter';
+const views = { quarter: [0.95, 0.75, 0.95], side: [0, 0.42, 1.25], close: [0.4, 0.55, -0.42], front: [1.25, 0.42, 0], top: [0.01, 1.4, 0] };
+cam.position.set(...(views[view] || views.quarter));
+const ctl = new OrbitControls(cam, r.domElement); ctl.target.set(...(view === 'close' ? [0.27, 0.42, 0] : [0.06, 0.3, 0])); ctl.update();
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb9a77f, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(1.5, 2.5, 1.2); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -1, right: 1, top: 1, bottom: -1 }); scene.add(sun);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(1.6, 64), new THREE.MeshStandardMaterial({ color: 0xe9e1c7 }));
+ground.rotation.x = -Math.PI / 2; ground.position.y = -0.068; ground.receiveShadow = true; scene.add(ground);
+const grid = new THREE.GridHelper(2, 20, 0xcfc39f, 0xdcd2b2); grid.position.y = -0.0675; scene.add(grid);
+const poses = { 1: 'san_sang', 2: 'vuon_hai', 3: 'gap' };
+let arm;
+new GLTFLoader().load('models/via_c_v0_1_khop.glb', g => {
+  g.scene.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
+  scene.add(g.scene);
+  arm = attachArm(g.scene);
+  arm.snap(POSES[poses[new URLSearchParams(location.search).get('pose')] || 'san_sang']);
+  window.__arm = arm; window.__ready = true;
+});
+addEventListener('keydown', e => arm && poses[e.key] && arm.command(POSES[poses[e.key]]));
+let last = performance.now();
+addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); r.setSize(innerWidth, innerHeight); });
+r.setAnimationLoop((t) => { const dt = Math.min(0.05, (t - last) / 1000); last = t; if (arm) arm.step(dt); r.render(scene, cam); });
+</script>
+</body>
+</html>

@@ -26,7 +26,7 @@ Lái tay bằng phím `W A S D`. Phím `C` đổi góc nhìn, `R` đưa robot v�
 
 ## Robot trong nông trang ảo
 
-Theo bản 1 đã chốt: đế 2 bánh trên nền cứng, tốc độ tối đa 0,4 m/s, camera trên cột cao 0,75 m, lidar 2D quét 360°.
+Robot là mô hình VIA C phần cứng v0.1 ([HARDWARE-v0.1.md](HARDWARE-v0.1.md)): đế 2 bánh v2.0, cột nâng 12 cm và tay SO-101. Tốc độ tối đa 0,4 m/s, camera trước của đế cao 0,27 m, lidar 2D quét 360°. Thêm `?cam=cot` vào địa chỉ để dùng camera trên cột 0,75 m như bản 1 trong tài liệu định hướng.
 
 ## Giao thức
 
@@ -39,7 +39,9 @@ Chương trình của người học mở websocket ở cổng 4567. Nông trang
 | `velocity` | Tốc độ hiện tại: `linear` (m/s), `angular` (rad/s) |
 | `lidar` | 180 tia quanh robot: `angle_min`, `angle_increment`, `range_max`, `ranges` (mét, `null` nếu không gặp vật) |
 | `tags` | Các mốc đang thấy: `id`, `distance`, `bearing` |
-| `labels` | Nhãn tự động của quả chanh thấy được: `class` (`lemon_ripe`, `lemon_unripe`), `bbox` [x, y, rộng, cao], `distance` |
+| `labels` | Nhãn tự động của quả chanh thấy được: `class` (`lemon_ripe`, `lemon_unripe`), `ripeness` (độ chín 0–1), `bbox` [x, y, rộng, cao], `distance` |
+| `arm` | Góc hiện tại 6 khớp tay SO-101 (radian): `shoulder_pan`, `shoulder_lift`, `elbow_flex`, `wrist_flex`, `wrist_roll`, `gripper` |
+| `gripper_tip` | Vị trí đầu kẹp trong vườn [x, y, z] (mét) |
 | `time` | Thời gian mô phỏng (giây) |
 
 Chương trình trả lời bằng một trong ba kiểu lệnh:
@@ -51,6 +53,15 @@ Chương trình trả lời bằng một trong ba kiểu lệnh:
 ```
 
 Kiểu thứ ba là kiểu của VIA B. Nếu quá 0,5 giây không có lệnh, robot tự dừng.
+
+Điều khiển tay thêm trường `arm`, gửi riêng hoặc chung với lệnh lái. Chỉ cần nhắc các khớp muốn đổi; mỗi khớp quay tối đa 2 rad/s, gần với servo thật, và bị chặn trong giới hạn của SO-101:
+
+```json
+{"linear": 0.2, "angular": 0, "arm": {"shoulder_pan": -0.8, "shoulder_lift": 0.55, "gripper": 0.9}}
+{"arm": {"shoulder_pan.pos": -45, "elbow_flex.pos": 10}}
+```
+
+Tên khớp giống LeRobot. Kiểu thứ hai dùng khoá `.pos` theo độ như lệnh của LeRobot, để chương trình viết cho tay thật dùng lại được. Ví dụ `examples/hello_com/arm_point.py` cho robot đi dọc luống và xoay tay chỉ về quả chanh chín gần nhất. Trên bàn phím, phím 1, 2, 3 đổi tay sang tư thế sẵn sàng, vươn hái, gập.
 
 Hệ trục theo chuẩn ROS: x về phía trước, y sang trái, góc quay ngược chiều kim đồng hồ.
 
@@ -64,6 +75,14 @@ python tools/run_sim.py --map ../maps/ten_ban_do.json
 
 Số đo trong `lang_maker_v1.json` là giả định, cần thay bằng số đo thật ở Làng Maker.
 
+### Kiểu cây dâu
+
+Cây dâu lấy kiểu dáng từ vườn dâu nuôi tằm của dự án [BLUESILK VR](https://github.com/tuanln/bluesilk-vr): gốc đốn thấp sát đất, 5–7 cành mảnh xoè như bình hoa, lá to hình tim mép răng cưa mọc so le, ngọn có lá non, vài quả dâu tím. Nền vườn dùng cùng bảng màu pastel. Mã ở `sim/web/mulberry.js`. Cả vườn dâu chỉ vẽ bằng 4 lớp hình lặp lại (cành, u gốc, lá, quả), nên máy yếu vẫn chạy được.
+
+### Kiểu cây chanh và độ chín
+
+Cây chanh cùng phong cách, cao 0,4–0,7 m (cây dâu 1,2–1,5 m): thân ngắn, vài cành chạc, tán tròn gồm nhiều khối lá xanh sẫm. Quả luôn mọc trên cây: mỗi quả treo ở mặt ngoài một khối lá, có cuống nối vào tán. Mỗi quả có **độ chín** từ 0 tới 1, màu đi từ xanh non, qua xanh ngả vàng, tới vàng chín. Quả có độ chín từ 0,6 trở lên được gắn nhãn `lemon_ripe`, dưới mức đó là `lemon_unripe`; nhãn cũng gửi kèm con số độ chín để AI học phân biệt bằng màu. Mã ở `sim/web/lemon.js`.
+
 ## Nối với ROS 2
 
 ```bash
@@ -71,11 +90,12 @@ cd ros2 && colcon build && source install/setup.bash
 ros2 launch via_com_sim_bridge sim_bridge.launch.py
 ```
 
-Gói này phát `/camera/image_raw/compressed`, `/scan`, `/odom`, `/tags`, `/fruit_labels` và nhận `/cmd_vel`. Robot thật sẽ dùng đúng các tên này, nên phần mềm viết trên nông trang ảo chuyển sang robot thật không phải sửa.
+Gói này phát `/camera/image_raw/compressed`, `/scan`, `/odom`, `/joint_states`, `/tags`, `/fruit_labels` và nhận `/cmd_vel`, `/arm/joint_commands`. Chạy thêm `robot_state_publisher` với `hardware/v0.1/via_c_v0_1.urdf` để có đủ toạ độ của đế, camera và tay. Robot thật sẽ dùng đúng các tên này, nên phần mềm viết trên nông trang ảo chuyển sang robot thật không phải sửa.
 
 ## Giới hạn của bản 0.1
 
-- Chưa có tay máy và chưa có vật lý (robot không trượt, không nghiêng).
+- Tay SO-101 đã cử động theo lệnh nhưng chưa có vật lý: tay chưa chạm, chưa nắm được quả, robot không trượt, không nghiêng.
+- Chưa có camera cổ tay.
 - Mốc chưa phải mẫu AprilTag thật; giả lập trả thẳng số hiệu, khoảng cách và góc.
 - Chưa có nhãn cho lá dâu, mới có nhãn quả chanh.
 - Cây là hình khối đơn giản. Ảnh giả lập chỉ để tập và thử thuật toán, không thay được ảnh thật.

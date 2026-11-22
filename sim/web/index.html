@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nông trang ảo VIA Cốm</title>
+<link rel="icon" type="image/png" href="./favicon.png">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #cfe6f5; font-family: system-ui, sans-serif; }
   #view { position: absolute; inset: 0; }
@@ -23,11 +24,11 @@
 <canvas id="cam" width="320" height="240"></canvas>
 <div id="camlabel">Camera của robot (ảnh gửi cho chương trình)</div>
 <div id="hud">
-  <b>Nông trang ảo VIA Cốm</b> · <span id="mapname"></span><br>
+  <img src="./favicon.png" alt="" width="22" height="22" style="vertical-align:-5px;margin-right:4px"><b>Nông trang ảo VIA Cốm</b> · <span id="mapname"></span><br>
   Kết nối: <span id="ws" class="off">chưa có chương trình điều khiển</span><br>
   Vị trí: <span id="pose">–</span><br>
   Tốc độ: <span id="vel">–</span> · Quả thấy được: <span id="nlabels">0</span><br>
-  Phím: <b>W A S D</b> lái tay · <b>C</b> đổi góc nhìn · <b>R</b> về vị trí đầu
+  Phím: <b>W A S D</b> lái đế · <b>1 2 3</b> tư thế tay · <b>C</b> đổi góc nhìn · <b>R</b> về vị trí đầu
 </div>
 <script type="module" src="./farm.js"></script>
 </body>

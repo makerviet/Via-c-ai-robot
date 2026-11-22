@@ -1,6 +1,12 @@
+<p align="center"><img src="docs/images/logo-via-com.png" alt="Logo VIA Cốm: hạt cốm có bông lúa, chạy trên bánh xe" width="200"></p>
+
 # VIA Cốm (VIA C) – Robot nông nghiệp mã nguồn mở của Làng Maker
 
 **VIA Cốm** là thế hệ thứ ba của dự án [VIA – Vietnam Autonomous](https://via.makerviet.org/) do Maker Việt khởi xướng, nối tiếp VIA B (Bánh Mì). VIA B dạy robot **lái xe**; VIA Cốm đưa robot ra vườn để **làm việc thật**: đi dọc luống, nhìn cây, hái lá dâu và hái chanh.
+
+> Từ ổ bánh mì chạy trên phố tới hạt cốm chạy trên đồng lúa: logo mới giữ bộ bánh xe ngôi sao của VIA B, thay ổ bánh mì bằng hạt cốm xanh có bông lúa.
+>
+> ![VIA Bánh Mì và VIA Cốm](docs/images/logo-via-b-va-com.png)
 
 Repo này là nơi chung cho kiến trúc, kế hoạch, bộ dữ liệu và hệ mô phỏng của dự án.
 
@@ -22,8 +28,11 @@ Nông trang ảo giữ đúng cách kết nối của giả lập VIA B, nên b�
 
 | Tài liệu | Nội dung |
 | --- | --- |
-| [Kiến trúc tổng thể](docs/ARCHITECTURE.md) | Các tầng phần cứng, phần mềm ROS 2, mô phỏng và dữ liệu ghép với nhau thế nào |
-| [Kế hoạch 2026–2030](docs/ROADMAP-2026-2030.md) | Lộ trình 5 năm hướng tới ứng dụng thực tiễn |
+| [Kiến trúc tổng thể](docs/ARCHITECTURE.md) | Mô hình robot, tải từng tầng, đế đổi được, bo mạch hai phần, phần mềm ROS 2, mô phỏng và dữ liệu |
+| [Khung giải pháp v0](docs/KHUNG-GIAI-PHAP-v0.md) | Đế 2 bánh + tay SO-101 + nông trang ảo: các khối, giao diện chung, đường đi dữ liệu |
+| [Phần cứng v0.1](docs/HARDWARE-v0.1.md) | Bản ghép thử đế 2 bánh v2.0 với tay SO-101, mô hình 3D và URDF |
+| [Cổng công cụ VIA](docs/CONG-CONG-CU.md) | Chuẩn mở để thay nhanh đầu công cụ: tay mềm hái quả, đầu hái lá dâu, gieo hạt, laser |
+| [Kế hoạch 2026–2030](docs/ROADMAP-2026-2030.md) | Năm phiên bản v0–v4, lộ trình tay và đầu công cụ, hệ sinh thái mở |
 | [Bộ dữ liệu](docs/DATASET.md) | Quy cách và mục tiêu của bộ dữ liệu robot AI nông nghiệp Việt Nam |
 | [Mô phỏng](docs/SIMULATION.md) | Nông trang ảo, giao thức, cách nối với ROS 2 |
 | [Đóng góp](CONTRIBUTING.md) | Cách tham gia |

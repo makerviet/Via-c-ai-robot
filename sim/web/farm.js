@@ -8,25 +8,34 @@
 // toạ độ đi qua hàm P().
 
 import * as THREE from './vendor/three.module.min.js';
+import { mulberryPlant, mulberryLeaf, PALETTE } from './mulberry.js';
+import { lemonPlant, leafClump, fruitColor, RIPE_AT } from './lemon.js';
+import { GLTFLoader } from './vendor/GLTFLoader.js';
+import { attachArm, POSES, JOINTS } from './so101.js';
 
 const params = new URLSearchParams(location.search);
 const MAP_URL = params.get('map') || '../maps/lang_maker_v1.json';
 const WS_URL = params.get('ws') || 'ws://localhost:4567';
 const SEND_HZ = Number(params.get('hz') || 10);
 
-// ----- Thông số robot bản 1: đế 2 bánh trên nền cứng (theo tài liệu định hướng) -----
+// ----- Thông số robot VIA C phần cứng v0.1: đế 2 bánh v2.0, đo từ file 3D (docs/HARDWARE-v0.1.md) -----
 const ROBOT = {
-  radius: 0.25,        // m, bán kính va chạm
-  track: 0.40,         // m, khoảng cách hai bánh
+  radius: 0.24,        // m, bán kính va chạm (thân 32 × 33 cm)
+  track: 0.22,         // m, khoảng cách tâm hai bánh
+  wheelR: 0.098,       // m, bán kính bánh
+  groundOffset: 0.068, // m, tâm trục bánh cao hơn mặt đất
   vMax: 0.4,           // m/s
   wMax: 1.2,           // rad/s
-  camHeight: 0.75,     // m, camera trên cột
-  camTilt: 0.20,       // rad, chúc xuống
+  camX: 0.125,         // m, camera trước nằm ở mặt trước đế
+  camHeight: 0.27,     // m, độ cao camera trước so với mặt đất
+  camTilt: -0.05,      // rad, âm là hơi ngửa lên để thấy tán chanh và cây dâu
   camFov: 70,          // độ, góc nhìn dọc
   camW: 320, camH: 240,
   lidarRays: 180, lidarMax: 8.0,
   cmdTimeout: 0.5,     // s, quá hạn không có lệnh thì dừng
 };
+// ?cam=cot: giữ camera trên cột 0,75 m như bản 1 trong tài liệu định hướng, để so hai vị trí camera.
+if (params.get('cam') === 'cot') Object.assign(ROBOT, { camX: -0.03, camHeight: 0.75, camTilt: 0.20 });
 
 const P = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
 
@@ -45,7 +54,7 @@ const canvas = document.getElementById('view');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xcfe6f5);
+scene.background = new THREE.Color(PALETTE.skyHorizon);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a5a, 1.1));
 const sun = new THREE.DirectionalLight(0xfff2d6, 1.6);
 sun.position.set(6, 12, 4);
@@ -96,18 +105,18 @@ function tagTexture(id) {
 function buildFarm(map) {
   world.map = map;
   const [sx, sy] = map.size;
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(sx + 8, sy + 8), new THREE.MeshLambertMaterial({ color: 0x7a9a55 }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(sx + 8, sy + 8), new THREE.MeshLambertMaterial({ color: PALETTE.grass }));
   ground.rotation.x = -Math.PI / 2; scene.add(ground);
 
   for (const p of map.paths || []) { // lối đi nền cứng
     const [x0, y0] = p.from, [x1, y1] = p.to;
     const len = Math.hypot(x1 - x0, y1 - y0);
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(len + p.width, p.width), new THREE.MeshLambertMaterial({ color: 0xc9c2b2 }));
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(len + p.width, p.width), new THREE.MeshLambertMaterial({ color: PALETTE.path }));
     m.rotation.x = -Math.PI / 2; m.rotation.z = Math.atan2(y1 - y0, x1 - x0);
     m.position.copy(P((x0 + x1) / 2, (y0 + y1) / 2, 0.005)); scene.add(m);
   }
 
-  const trunks = [], leavesLemon = [], leavesMul = [], ripe = [], unripe = [], soil = [];
+  const trunks = [], leavesLemon = [], leavesMul = [], ripe = [], unripe = [], soil = [], mulberries = [], lemons = [];
   const r = rng(2026);
   for (const row of map.rows || []) {
     const [x0, y0] = row.start, [x1, y1] = row.end;
@@ -117,23 +126,29 @@ function buildFarm(map) {
       const t = n > 1 ? i / (n - 1) : 0;
       const x = x0 + (x1 - x0) * t + (r() - 0.5) * 0.08, y = y0 + (y1 - y0) * t + (r() - 0.5) * 0.08;
       if (row.crop === 'lemon') {
-        const h = 0.95 + r() * 0.25, fr = 0.40 + r() * 0.10;
-        trunks.push({ x, y, h: h - fr * 0.6, r: 0.05 });
-        leavesLemon.push({ x, y, z: h, r: fr });
-        const k = 5 + Math.floor(r() * 5);
-        for (let j = 0; j < k; j++) { // quả nằm trên mặt tán, lệch về nửa dưới
-          const az = r() * Math.PI * 2, el = -0.9 + r() * 1.3;
-          const fx = x + Math.cos(az) * Math.cos(el) * fr, fy = y + Math.sin(az) * Math.cos(el) * fr, fz = h + Math.sin(el) * fr;
-          (r() > 0.35 ? ripe : unripe).push({ x: fx, y: fy, z: fz, r: 0.035 });
+        // chanh: cây thấp hơn dâu, tán tròn sẫm, quả từ xanh ngả vàng theo độ chín
+        const plant = lemonPlant(r, { height: 0.4 + r() * 0.3 });
+        const rot = r() * Math.PI * 2;
+        lemons.push({ x, y, rot, plant });
+        world.obstacles.push({ x, y, r: 0.05 });
+        leavesLemon.push({ x, y, z: plant.crown.y + 0.06, r: plant.crown.r * 0.7 });
+        const c = Math.cos(rot), sn = Math.sin(rot);
+        for (const f of plant.fruits) { // đổi toạ độ quả từ hệ cục bộ của cây sang hệ ROS
+          const [lx, ly, lz] = f.p; // three cục bộ: x, y lên, z
+          const tx = lx * c + lz * sn, tz = -lx * sn + lz * c; // quay quanh trục đứng
+          (f.ripeness >= RIPE_AT ? ripe : unripe).push({ x: x + tx, y: y - tz, z: ly + 0.06, r: f.r, ripeness: f.ripeness });
         }
-      } else { // dâu: bụi cao, nhiều tầng lá
-        trunks.push({ x, y, h: 0.5, r: 0.04 });
-        for (let j = 0; j < 3; j++) leavesMul.push({ x: x + (r() - 0.5) * 0.2, y: y + (r() - 0.5) * 0.2, z: 0.5 + j * 0.3, r: 0.30 + r() * 0.08 });
+      } else { // dâu: gốc đốn thấp, cành xoè, lá hình tim (kiểu vườn dâu BLUESILK)
+        const plant = mulberryPlant(r);
+        mulberries.push({ x, y, rot: r() * Math.PI * 2, plant });
+        world.obstacles.push({ x, y, r: 0.10 });
+        // vùng tán lá dùng để xét che khuất khi gắn nhãn quả
+        for (let j = 0; j < 2; j++) leavesMul.push({ x, y, z: 0.75 + j * 0.45, r: 0.32 });
       }
     }
   }
 
-  instanced(new THREE.BoxGeometry(1, 0.06, 0.5), 0x6b4f32, soil, (s, m) => {
+  instanced(new THREE.BoxGeometry(1, 0.06, 0.5), PALETTE.earthDark, soil, (s, m) => {
     m.compose(P(s.x, s.y, 0.03), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), s.a), new THREE.Vector3(s.len + 0.6, 1, 1));
   });
   instanced(new THREE.CylinderGeometry(1, 1, 1, 8), 0x6e5338, trunks, (t, m) => {
@@ -141,15 +156,13 @@ function buildFarm(map) {
   });
   const ball = new THREE.IcosahedronGeometry(1, 1);
   const place = (s, m) => m.compose(P(s.x, s.y, s.z), new THREE.Quaternion(), new THREE.Vector3(s.r, s.r, s.r));
-  instanced(ball, 0x2f6b2c, leavesLemon, place);
-  instanced(ball, 0x4f9a3a, leavesMul, place);
-  instanced(new THREE.SphereGeometry(1, 10, 8), 0xf3d32b, ripe, place);
-  instanced(new THREE.SphereGeometry(1, 10, 8), 0x8fc43a, unripe, place);
+  drawMulberries(mulberries);
+  drawLemons(lemons);
 
   for (const t of trunks) world.obstacles.push({ x: t.x, y: t.y, r: t.r + 0.03 });
   for (const s of [...leavesLemon, ...leavesMul]) world.foliage.push({ c: P(s.x, s.y, s.z), r: s.r * 0.97 });
-  for (const f of ripe) world.fruits.push({ p: P(f.x, f.y, f.z), r: f.r, cls: 'lemon_ripe' });
-  for (const f of unripe) world.fruits.push({ p: P(f.x, f.y, f.z), r: f.r, cls: 'lemon_unripe' });
+  for (const f of ripe) world.fruits.push({ p: P(f.x, f.y, f.z), r: f.r, cls: 'lemon_ripe', ripeness: f.ripeness });
+  for (const f of unripe) world.fruits.push({ p: P(f.x, f.y, f.z), r: f.r, cls: 'lemon_unripe', ripeness: f.ripeness });
 
   for (const t of map.tags || []) {
     const [x, y] = t.pos;
@@ -166,23 +179,92 @@ function buildFarm(map) {
   document.getElementById('mapname').textContent = map.name || '';
 }
 
+// Vẽ cả vườn dâu bằng 4 InstancedMesh: đoạn cành, u gốc, lá, quả.
+function drawMulberries(list) {
+  if (!list.length) return;
+  const segs = [], knobs = [], leaves = [], fruits = [];
+  const m = new THREE.Matrix4(), base = new THREE.Matrix4(), q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0), d = new THREE.Vector3(), v = new THREE.Vector3(), s = new THREE.Vector3();
+  for (const it of list) {
+    base.compose(P(it.x, it.y, 0.06), q.setFromAxisAngle(up, it.rot), s.set(1, 1, 1));
+    for (const g of it.plant.segs) segs.push({ g, base: base.clone() });
+    for (const k of it.plant.knobs) knobs.push({ k, base: base.clone() });
+    for (const l of it.plant.leaves) leaves.push({ l, base: base.clone() });
+    for (const f of it.plant.fruits) fruits.push({ f, base: base.clone() });
+  }
+  const mat = opts => new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9, metalness: 0, ...opts });
+  const fill = (geo, material, items, place, cast = true) => {
+    const mesh = new THREE.InstancedMesh(geo, material, items.length);
+    const c = new THREE.Color();
+    items.forEach((it, i) => { place(it, m); mesh.setMatrixAt(i, m); mesh.setColorAt(i, c.set(it.color)); });
+    mesh.castShadow = cast; scene.add(mesh); return mesh;
+  };
+  // cành: trụ đơn vị (cao 1, từ y=0 tới y=1) kéo giữa hai điểm, thon dần
+  const rod = new THREE.CylinderGeometry(0.6, 1, 1, 5); rod.translate(0, 0.5, 0);
+  fill(rod, mat({}), segs.map(x => ({ ...x, color: x.g.color })), (x, out) => {
+    const a = new THREE.Vector3(...x.g.p0), b = new THREE.Vector3(...x.g.p1);
+    d.subVectors(b, a); const len = d.length();
+    out.compose(a, new THREE.Quaternion().setFromUnitVectors(up, d.normalize()), v.set(x.g.r0, len, x.g.r0)).premultiply(x.base);
+  });
+  fill(new THREE.IcosahedronGeometry(1, 0), mat({}), knobs.map(x => ({ ...x, color: x.k.color })), (x, out) =>
+    out.compose(new THREE.Vector3(...x.k.p), q.identity(), v.setScalar(x.k.s)).premultiply(x.base));
+  fill(mulberryLeaf(), mat({ vertexColors: true, roughness: 0.42, side: THREE.DoubleSide }), leaves.map(x => ({ ...x, color: x.l.color })), (x, out) =>
+    out.compose(new THREE.Vector3(...x.l.p), x.l.q, v.setScalar(x.l.s)).premultiply(x.base));
+  fill(new THREE.IcosahedronGeometry(1, 1), mat({ roughness: 0.6 }), fruits.map(x => ({ ...x, color: x.f.color })), (x, out) =>
+    out.compose(new THREE.Vector3(...x.f.p), q.identity(), v.set(0.016, 0.027, 0.016)).premultiply(x.base));
+}
+
+// Vẽ cả vườn chanh: cành, 3 biến thể khối lá, quả (màu theo độ chín).
+function drawLemons(list) {
+  if (!list.length) return;
+  const m = new THREE.Matrix4(), base = new THREE.Matrix4(), q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0), d = new THREE.Vector3(), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  const segs = [], clumps = [[], [], []], fruits = [];
+  for (const it of list) {
+    base.compose(P(it.x, it.y, 0.06), q.setFromAxisAngle(up, it.rot), one);
+    for (const g of it.plant.segs) segs.push({ g, base: base.clone(), color: g.color });
+    for (const k of it.plant.clumps) clumps[k.variant].push({ k, base: base.clone(), color: k.color });
+    for (const f of it.plant.fruits) fruits.push({ f, base: base.clone(), color: fruitColor(f.ripeness) });
+  }
+  const mat = opts => new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9, metalness: 0, ...opts });
+  const fill = (geo, material, items, place) => {
+    if (!items.length) return;
+    const mesh = new THREE.InstancedMesh(geo, material, items.length);
+    const c = new THREE.Color();
+    items.forEach((it, i) => { place(it, m); mesh.setMatrixAt(i, m); mesh.setColorAt(i, c.set(it.color)); });
+    scene.add(mesh);
+  };
+  const rod = new THREE.CylinderGeometry(0.7, 1, 1, 5); rod.translate(0, 0.5, 0);
+  fill(rod, mat({}), segs, (x, out) => {
+    const a = new THREE.Vector3(...x.g.p0), b = new THREE.Vector3(...x.g.p1);
+    d.subVectors(b, a); const len = d.length();
+    out.compose(a, new THREE.Quaternion().setFromUnitVectors(up, d.normalize()), v.set(x.g.r0, len, x.g.r0)).premultiply(x.base);
+  });
+  clumps.forEach((items, i) => fill(leafClump(i + 1), mat({ roughness: 0.5 }), items, (x, out) =>
+    out.compose(new THREE.Vector3(...x.k.p), q.identity(), v.setScalar(x.k.s)).premultiply(x.base)));
+  // quả chanh hơi thuôn, nằm nghiêng ngẫu nhiên
+  fill(new THREE.IcosahedronGeometry(1, 1), mat({ roughness: 0.45 }), fruits, (x, out) =>
+    out.compose(new THREE.Vector3(...x.f.p), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), x.f.tilt),
+      v.set(x.f.r, x.f.r * 1.3, x.f.r)).premultiply(x.base));
+}
+
 // ---------------------------------------------------------------- robot
 const robot = { x: 0, y: 0, theta: 0, v: 0, w: 0, cmdV: 0, cmdW: 0, cmdAt: -1, body: new THREE.Group() };
 
+// Robot VIA C phần cứng v0.1: đế 2 bánh v2.0 + cột nâng 12 cm + tay SO-101 (docs/HARDWARE-v0.1.md).
+// Mô hình nằm trong models/via_c_v0_1_khop.glb, đã đổi sang trục three (y lên trên, mũi robot theo +x),
+// 6 khớp SO-101 xoay được (so101.js). Gốc mô hình ở tâm trục bánh, đáy bánh thấp hơn gốc 6,8 cm nên nâng lên.
+let arm = null;
 function buildRobot() {
   const g = robot.body;
-  const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.14, 0.36), mat(0xf2a53a)); base.position.y = 0.14; g.add(base);
-  for (const s of [-1, 1]) {
-    const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.04, 16), mat(0x222222));
-    wh.rotation.x = Math.PI / 2; wh.position.set(0, 0.08, s * 0.2); g.add(wh);
-  }
-  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.6, 8), mat(0x888888)); mast.position.set(-0.1, 0.5, 0); g.add(mast);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.16), mat(0x333333)); head.position.set(-0.08, ROBOT.camHeight, 0); g.add(head);
-  const lidar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.04, 16), mat(0x1c4fa0)); lidar.position.set(0.1, 0.24, 0); g.add(lidar);
+  new GLTFLoader().load('models/via_c_v0_1_khop.glb', (gltf) => {
+    gltf.scene.position.y = ROBOT.groundOffset;
+    g.add(gltf.scene);
+    arm = attachArm(gltf.scene); arm.snap(POSES.san_sang); window.__sim.arm = arm;
+  }, undefined, (e) => console.warn('Không nạp được mô hình robot', e));
   robotCam.rotation.order = 'YXZ';
-  robotCam.rotation.set(-ROBOT.camTilt, -Math.PI / 2, 0); // nhìn theo +x của robot, chúc xuống
-  robotCam.position.set(-0.03, ROBOT.camHeight, 0);
+  robotCam.rotation.set(-ROBOT.camTilt, -Math.PI / 2, 0); // nhìn theo +x của robot
+  robotCam.position.set(ROBOT.camX, ROBOT.camHeight, 0);
   g.add(robotCam);
   scene.add(g);
 }
@@ -200,7 +282,13 @@ function blocked(x, y) {
 }
 
 const keys = {};
-addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; if (e.key.toLowerCase() === 'c') topView = !topView; if (e.key.toLowerCase() === 'r') resetRobot(); });
+const ARM_KEYS = { 1: 'san_sang', 2: 'vuon_hai', 3: 'gap' };
+addEventListener('keydown', (e) => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key.toLowerCase() === 'c') topView = !topView;
+  if (e.key.toLowerCase() === 'r') resetRobot();
+  if (arm && ARM_KEYS[e.key]) arm.command(POSES[ARM_KEYS[e.key]]);
+});
 addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 let topView = params.get('view') === 'top';
 let simTime = 0;
@@ -274,7 +362,7 @@ function fruitLabels() { // nhãn tự động: khung bao từng quả chanh tro
     }
     if (hidden) continue;
     const pr = Math.max(1.5, (fr.r * f) / dist), cx = ((_v.x + 1) / 2) * W, cy = ((1 - _v.y) / 2) * H;
-    out.push({ class: fr.cls, bbox: [+(cx - pr).toFixed(1), +(cy - pr).toFixed(1), +(2 * pr).toFixed(1), +(2 * pr).toFixed(1)], distance: +dist.toFixed(3) });
+    out.push({ class: fr.cls, ripeness: +fr.ripeness.toFixed(2), bbox: [+(cx - pr).toFixed(1), +(cy - pr).toFixed(1), +(2 * pr).toFixed(1), +(2 * pr).toFixed(1)], distance: +dist.toFixed(3) });
   }
   return out;
 }
@@ -300,6 +388,12 @@ function connect() {
   ws.onmessage = (ev) => {
     let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
     const clip = (x, a) => Math.max(-a, Math.min(a, Number(x) || 0));
+    if (m.arm && arm) { // lệnh tay: {"arm": {"shoulder_pan": 0.2, ...}} theo radian,
+      const a = {};      // hoặc khoá kiểu LeRobot "shoulder_pan.pos" theo độ
+      for (const [k, v] of Object.entries(m.arm)) a[k.endsWith('.pos') ? k.slice(0, -4) : k] = k.endsWith('.pos') ? Number(v) * Math.PI / 180 : Number(v);
+      arm.command(a);
+    }
+    if (!('linear' in m || 'angular' in m || 'left' in m || 'right' in m || 'throttle' in m || 'steering' in m)) return;
     if ('linear' in m || 'angular' in m) { robot.cmdV = clip(m.linear, ROBOT.vMax); robot.cmdW = clip(m.angular, ROBOT.wMax); }
     else if ('left' in m || 'right' in m) { // tốc độ hai bánh, -1..1
       const l = clip(m.left, 1) * ROBOT.vMax, r = clip(m.right, 1) * ROBOT.vMax;
@@ -312,6 +406,7 @@ function connect() {
 }
 
 let lastSend = 0, lastLabels = [];
+const _tip = new THREE.Vector3();
 function publish() {
   grabCamera();
   lastLabels = fruitLabels();
@@ -324,6 +419,11 @@ function publish() {
     tags: seenTags(),
     labels: lastLabels,
   };
+  if (arm) {
+    msg.arm = Object.fromEntries(JOINTS.map((j) => [j.name, +arm.q[j.name].toFixed(4)]));
+    const t = arm.tipWorld(_tip); // đầu kẹp theo toạ độ vườn (x, y trên mặt đất, z lên trên)
+    msg.gripper_tip = [+t.x.toFixed(3), +(-t.z).toFixed(3), +t.y.toFixed(3)];
+  }
   window.__sim.last = msg;
   if (wsOk && ws.readyState === 1) ws.send(JSON.stringify(msg));
 }
@@ -341,6 +441,7 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   simTime += dt;
   stepRobot(dt);
+  if (arm) arm.step(dt);
   robot.body.updateMatrixWorld(true);
   if (simTime - lastSend >= 1 / SEND_HZ) { lastSend = simTime; publish(); }
   if (topView) { viewCam.position.copy(P(robot.x, robot.y, 9)); viewCam.up.set(1, 0, 0); viewCam.lookAt(P(robot.x, robot.y, 0)); }

@@ -1,0 +1,71 @@
+# VIA C phần cứng v0.1
+
+Bản ghép thử 22/11/2026: đế 2 bánh **v2.0** (thiết kế Onshape của nhóm) + **cột nâng 12 cm** + tay **SO-101** của LeRobot. Đây là mô hình 3D để bàn thiết kế và chạy trong nông trang ảo, chưa phải bản vẽ chế tạo.
+
+![VIA C v0.1, góc nghiêng, tay ở tư thế sẵn sàng](images/via-c-v0-1-nghieng.png)
+
+| Mặt trước | Tay vươn hái |
+| --- | --- |
+| ![Mặt trước](images/via-c-v0-1-mat-truoc.png) | ![Mặt bên, tay vươn ra trước](images/via-c-v0-1-vuon-hai.png) |
+
+Xem và xoay mô hình 3D: chạy `python tools/run_sim.py` rồi mở `http://localhost:8000/web/robot.html` (phím 1, 2, 3 đổi tư thế tay).
+
+## Thông số đo từ file 3D
+
+| Phần | Số đo |
+| --- | --- |
+| Đế (cả bánh) | 32 × 33 cm, cao 30 cm tới mặt nắp |
+| Bánh chủ động | 2 bánh giữa thân, đường kính khoảng 19,6 cm, tâm hai bánh cách nhau khoảng 22 cm |
+| Chân đỡ | 4 chân góc, mỗi chân có đệm trượt nhỏ chạm đất |
+| Camera trước | Sau khe ở mặt trước vỏ, cao khoảng 27 cm so với mặt đất |
+| Mặt nắp | Phẳng, cao 30 cm so với đất, đủ chỗ bắt cột nâng |
+| Cột nâng | Nhôm định hình 40 × 40, cao 12 cm, đặt lùi về sau 6 cm so với tâm |
+| Vai tay SO-101 | Cao khoảng 49 cm so với đất |
+| Cả robot, tay ở tư thế sẵn sàng | Cao khoảng 68 cm |
+| Tầm với tay SO-101 | Khoảng 40 cm tính từ vai |
+
+Với vai ở 49 cm và tầm với 40 cm, tay hái được quả chanh trên cây 0,4–0,7 m. Ngọn cây dâu 1,2–1,5 m nằm ngoài tầm, cần cột nâng có ray trượt như trong phác thảo.
+
+## Trong nông trang ảo
+
+![Robot VIA C v0.1 đi giữa luống chanh và luống dâu](images/via-c-v0-1-trong-nong-trang.png)
+
+Nông trang ảo đã thay hộp cam cũ bằng mô hình này. Tay SO-101 cử động được: chương trình gửi góc 6 khớp qua websocket, tên khớp giống LeRobot (xem [SIMULATION.md](SIMULATION.md#giao-thức)). Phần đế dùng số đo thật: khoảng cách hai bánh 22 cm, bán kính va chạm 24 cm. Camera gửi cho chương trình giờ là camera trước của đế ở độ cao 27 cm. Muốn so với camera trên cột 0,75 m như bản 1 trong tài liệu định hướng, mở trang với `?cam=cot`.
+
+Đã thử ngày 22/11/2026: chương trình mẫu Hello Cốm vẫn tự đi giữa luống, lệch tâm khoảng 2 cm, và thấy nhiều quả chanh hơn vì camera thấp ngang tán chanh.
+
+## Tay mềm (tạm gác)
+
+Phương án tay mềm xoắn ốc logarit và đầu xoắn nhỏ trên cổ tay SO-101 đã có bản ghép thử và tính tải, nhưng **tạm gác từ 22/11/2026** để tập trung vào SO-101, đế và mô phỏng. Xem [TAY-MEM-XOAN.md](TAY-MEM-XOAN.md).
+
+## Khác với bản phác thảo
+
+| Phác thảo trong tài liệu định hướng | Đế v2.0 hiện tại |
+| --- | --- |
+| Thân khoảng 45 × 60 cm, chở pin, bơm, khay nông sản | Thân 32 × 33 cm, gọn hơn, chưa có chỗ cho bơm khí và khay |
+| Cột cảm biến riêng có lidar và camera đo chiều sâu | Camera trước trong vỏ; chưa thấy lidar trên mô hình |
+| Cột nâng có ray trượt 40–60 cm | Cột cố định 12 cm (giả định của bản ghép này) |
+
+Đế nhỏ hợp với bản v0 chạy trong nhà và lớp học. Khi ra vườn thật sẽ cần đế lớn hơn hoặc đế P2 theo [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Tệp trong repo
+
+| Tệp | Dùng để |
+| --- | --- |
+| `hardware/v0.1/via_c_v0_1.urdf` | Mô tả robot cho ROS 2, RViz, Gazebo, Isaac Sim: đế, camera trước, cột nâng, 6 khớp tay SO-101 |
+| `hardware/v0.1/meshes/` | Lưới 3D đã giảm chi tiết của đế v2.0 và các khâu SO-101 |
+| `hardware/v0.1/tao_mo_hinh.py` | Chương trình ghép lại mô hình khi đế hoặc vị trí cột thay đổi |
+| `sim/web/models/via_c_v0_1_khop.glb` | Mô hình có màu và có khớp: 6 khớp SO-101 xoay được trong trang web |
+| `sim/web/so101.js` | Tên, giới hạn khớp và tư thế mẫu của SO-101, dùng chung cho nông trang ảo và trang xem |
+| `sim/web/robot.html` | Trang xem mô hình 3D |
+
+Tay SO-101 lấy từ repo [TheRobotStudio/SO-ARM100](https://github.com/TheRobotStudio/SO-ARM100), giấy phép Apache-2.0, bản sao giấy phép nằm ở `hardware/v0.1/meshes/so101/`.
+
+## Việc cần chốt
+
+- Vị trí và chiều cao cột nâng: cố định 12 cm như bản này, hay ray trượt để với tới cây dâu.
+- Camera chính: camera trước của đế (27 cm), thêm cột camera 0,75 m, hay thêm camera cổ tay của SO-101.
+- Có gắn lidar 2D cho bản v0 không, và gắn ở đâu để tay không che.
+- Đế v2.0 cần tách bánh thành khối riêng trong Onshape để mô phỏng bánh quay; bản xuất STL hiện gộp thành một khối.
+- Mua servo STS3215 bản 12 V cho khớp vai và khuỷu để đủ tải khi duỗi xa.
+- Kiểm cân bằng: tay vươn hết tầm về trước khi đế chỉ có 2 bánh giữa và 4 chân đỡ.

@@ -7,11 +7,15 @@ phần mềm (Nav2, nhận dạng, policy) chạy được trên giả lập và
 Phát:
     /camera/image_raw/compressed  sensor_msgs/CompressedImage (JPEG)
     /scan                         sensor_msgs/LaserScan
-    /odom                         nav_msgs/Odometry  (+ TF odom -> base_link)
+    /odom                         nav_msgs/Odometry  (+ TF odom -> base_footprint, khớp URDF hardware/v0.1)
+    /joint_states                 sensor_msgs/JointState (6 khớp SO-101, radian, tên như LeRobot)
     /tags                         std_msgs/String    (JSON: id, distance, bearing)
     /fruit_labels                 std_msgs/String    (JSON: nhãn tự động của giả lập)
 Nhận:
     /cmd_vel                      geometry_msgs/Twist
+    /arm/joint_commands           sensor_msgs/JointState (đích cho các khớp tay, radian)
+
+Mô tả robot: chạy robot_state_publisher với hardware/v0.1/via_c_v0_1.urdf để có đủ TF của đế và tay.
 
 LƯU Ý: bản 0.1, chưa chạy thử trên máy có ROS 2. Xem docs/SIMULATION.md.
 """
@@ -26,7 +30,7 @@ import websockets
 from geometry_msgs.msg import TransformStamped, Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
-from sensor_msgs.msg import CompressedImage, LaserScan
+from sensor_msgs.msg import CompressedImage, JointState, LaserScan
 from std_msgs.msg import String
 from tf2_ros import TransformBroadcaster
 
@@ -41,20 +45,27 @@ class SimBridge(Node):
         self.pub_tags = self.create_publisher(String, "tags", 10)
         self.pub_labels = self.create_publisher(String, "fruit_labels", 10)
         self.tf = TransformBroadcaster(self)
+        self.pub_joints = self.create_publisher(JointState, "joint_states", 10)
         self.create_subscription(Twist, "cmd_vel", self.on_cmd, 10)
+        self.create_subscription(JointState, "arm/joint_commands", self.on_arm, 10)
         self.cmd = (0.0, 0.0)
+        self.arm = None
         self.lock = threading.Lock()
 
     def on_cmd(self, msg):
         with self.lock:
             self.cmd = (msg.linear.x, msg.angular.z)
 
+    def on_arm(self, msg):
+        with self.lock:
+            self.arm = dict(zip(msg.name, (float(p) for p in msg.position)))
+
     def publish(self, data):
         now = self.get_clock().now().to_msg()
 
         img = CompressedImage()
         img.header.stamp = now
-        img.header.frame_id = "camera_link"
+        img.header.frame_id = "camera_front_link"
         img.format = "jpeg"
         img.data = base64.b64decode(data["image"])
         self.pub_image.publish(img)
@@ -76,7 +87,7 @@ class SimBridge(Node):
         odom = Odometry()
         odom.header.stamp = now
         odom.header.frame_id = "odom"
-        odom.child_frame_id = "base_link"
+        odom.child_frame_id = "base_footprint"
         odom.pose.pose.position.x = pose["x"]
         odom.pose.pose.position.y = pose["y"]
         odom.pose.pose.orientation.z = qz
@@ -88,7 +99,7 @@ class SimBridge(Node):
         t = TransformStamped()
         t.header.stamp = now
         t.header.frame_id = "odom"
-        t.child_frame_id = "base_link"
+        t.child_frame_id = "base_footprint"
         t.transform.translation.x = pose["x"]
         t.transform.translation.y = pose["y"]
         t.transform.rotation.z = qz
@@ -98,13 +109,24 @@ class SimBridge(Node):
         self.pub_tags.publish(String(data=json.dumps(data["tags"])))
         self.pub_labels.publish(String(data=json.dumps(data["labels"])))
 
+        if "arm" in data:
+            js = JointState()
+            js.header.stamp = now
+            js.name = list(data["arm"].keys())
+            js.position = [float(v) for v in data["arm"].values()]
+            self.pub_joints.publish(js)
+
     async def handle(self, websocket, path=None):
         self.get_logger().info("Nông trang ảo đã kết nối.")
         async for message in websocket:
             self.publish(json.loads(message))
             with self.lock:
                 linear, angular = self.cmd
-            await websocket.send(json.dumps({"linear": linear, "angular": angular}))
+                arm, self.arm = self.arm, None
+            out = {"linear": linear, "angular": angular}
+            if arm:
+                out["arm"] = arm
+            await websocket.send(json.dumps(out))
 
     async def serve(self):
         async with websockets.serve(self.handle, "0.0.0.0", self.port, ping_interval=None, max_size=None):

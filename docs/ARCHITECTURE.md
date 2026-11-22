@@ -60,6 +60,8 @@ Theo bản 1 đã chốt trong tài liệu định hướng:
 
 #### Mô hình robot (bản phác thảo)
 
+Bản ghép 3D đầu tiên từ đế thật v2.0 và tay SO-101 nằm ở [HARDWARE-v0.1.md](HARDWARE-v0.1.md).
+
 ![Phác thảo mặt bên VIA Cốm: đế, cột cảm biến, cột nâng, cánh tay mềm, đầu công cụ](images/phac-thao-mat-ben.png)
 
 Robot gồm bốn khối, xếp theo nguyên tắc **mọi thứ nặng nằm trên đế**:

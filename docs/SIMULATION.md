@@ -26,7 +26,7 @@ Lái tay bằng phím `W A S D`. Phím `C` đổi góc nhìn, `R` đưa robot v�
 
 ## Robot trong nông trang ảo
 
-Theo bản 1 đã chốt: đế 2 bánh trên nền cứng, tốc độ tối đa 0,4 m/s, camera trên cột cao 0,75 m, lidar 2D quét 360°.
+Robot là mô hình VIA C phần cứng v0.1 ([HARDWARE-v0.1.md](HARDWARE-v0.1.md)): đế 2 bánh v2.0, cột nâng 12 cm và tay SO-101. Tốc độ tối đa 0,4 m/s, camera trước của đế cao 0,27 m, lidar 2D quét 360°. Thêm `?cam=cot` vào địa chỉ để dùng camera trên cột 0,75 m như bản 1 trong tài liệu định hướng.
 
 ## Giao thức
 

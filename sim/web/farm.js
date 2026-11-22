@@ -10,25 +10,31 @@
 import * as THREE from './vendor/three.module.min.js';
 import { mulberryPlant, mulberryLeaf, PALETTE } from './mulberry.js';
 import { lemonPlant, leafClump, fruitColor, RIPE_AT } from './lemon.js';
+import { GLTFLoader } from './vendor/GLTFLoader.js';
 
 const params = new URLSearchParams(location.search);
 const MAP_URL = params.get('map') || '../maps/lang_maker_v1.json';
 const WS_URL = params.get('ws') || 'ws://localhost:4567';
 const SEND_HZ = Number(params.get('hz') || 10);
 
-// ----- Thông số robot bản 1: đế 2 bánh trên nền cứng (theo tài liệu định hướng) -----
+// ----- Thông số robot VIA C phần cứng v0.1: đế 2 bánh v2.0, đo từ file 3D (docs/HARDWARE-v0.1.md) -----
 const ROBOT = {
-  radius: 0.25,        // m, bán kính va chạm
-  track: 0.40,         // m, khoảng cách hai bánh
+  radius: 0.24,        // m, bán kính va chạm (thân 32 × 33 cm)
+  track: 0.22,         // m, khoảng cách tâm hai bánh
+  wheelR: 0.098,       // m, bán kính bánh
+  groundOffset: 0.068, // m, tâm trục bánh cao hơn mặt đất
   vMax: 0.4,           // m/s
   wMax: 1.2,           // rad/s
-  camHeight: 0.75,     // m, camera trên cột
-  camTilt: 0.20,       // rad, chúc xuống
+  camX: 0.125,         // m, camera trước nằm ở mặt trước đế
+  camHeight: 0.27,     // m, độ cao camera trước so với mặt đất
+  camTilt: -0.05,      // rad, âm là hơi ngửa lên để thấy tán chanh và cây dâu
   camFov: 70,          // độ, góc nhìn dọc
   camW: 320, camH: 240,
   lidarRays: 180, lidarMax: 8.0,
   cmdTimeout: 0.5,     // s, quá hạn không có lệnh thì dừng
 };
+// ?cam=cot: giữ camera trên cột 0,75 m như bản 1 trong tài liệu định hướng, để so hai vị trí camera.
+if (params.get('cam') === 'cot') Object.assign(ROBOT, { camX: -0.03, camHeight: 0.75, camTilt: 0.20 });
 
 const P = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
 
@@ -244,20 +250,18 @@ function drawLemons(list) {
 // ---------------------------------------------------------------- robot
 const robot = { x: 0, y: 0, theta: 0, v: 0, w: 0, cmdV: 0, cmdW: 0, cmdAt: -1, body: new THREE.Group() };
 
+// Robot VIA C phần cứng v0.1: đế 2 bánh v2.0 + cột nâng 12 cm + tay SO-101 (docs/HARDWARE-v0.1.md).
+// Mô hình nằm trong models/via_c_v0_1.glb, đã đổi sang trục three (y lên trên, mũi robot theo +x).
+// Gốc mô hình ở tâm trục bánh, đáy bánh thấp hơn gốc 6,8 cm nên nâng lên cho chạm đất.
 function buildRobot() {
   const g = robot.body;
-  const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.14, 0.36), mat(0xf2a53a)); base.position.y = 0.14; g.add(base);
-  for (const s of [-1, 1]) {
-    const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.04, 16), mat(0x222222));
-    wh.rotation.x = Math.PI / 2; wh.position.set(0, 0.08, s * 0.2); g.add(wh);
-  }
-  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.6, 8), mat(0x888888)); mast.position.set(-0.1, 0.5, 0); g.add(mast);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.16), mat(0x333333)); head.position.set(-0.08, ROBOT.camHeight, 0); g.add(head);
-  const lidar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.04, 16), mat(0x1c4fa0)); lidar.position.set(0.1, 0.24, 0); g.add(lidar);
+  new GLTFLoader().load('models/via_c_v0_1.glb', (gltf) => {
+    gltf.scene.position.y = ROBOT.groundOffset;
+    g.add(gltf.scene);
+  }, undefined, (e) => console.warn('Không nạp được mô hình robot', e));
   robotCam.rotation.order = 'YXZ';
-  robotCam.rotation.set(-ROBOT.camTilt, -Math.PI / 2, 0); // nhìn theo +x của robot, chúc xuống
-  robotCam.position.set(-0.03, ROBOT.camHeight, 0);
+  robotCam.rotation.set(-ROBOT.camTilt, -Math.PI / 2, 0); // nhìn theo +x của robot
+  robotCam.position.set(ROBOT.camX, ROBOT.camHeight, 0);
   g.add(robotCam);
   scene.add(g);
 }

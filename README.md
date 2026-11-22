@@ -1,6 +1,12 @@
+<p align="center"><img src="docs/images/logo-via-com.png" alt="Logo VIA Cốm: hạt cốm có bông lúa, chạy trên bánh xe" width="200"></p>
+
 # VIA Cốm (VIA C) – Robot nông nghiệp mã nguồn mở của Làng Maker
 
 **VIA Cốm** là thế hệ thứ ba của dự án [VIA – Vietnam Autonomous](https://via.makerviet.org/) do Maker Việt khởi xướng, nối tiếp VIA B (Bánh Mì). VIA B dạy robot **lái xe**; VIA Cốm đưa robot ra vườn để **làm việc thật**: đi dọc luống, nhìn cây, hái lá dâu và hái chanh.
+
+> Từ ổ bánh mì chạy trên phố tới hạt cốm chạy trên đồng lúa: logo mới giữ bộ bánh xe ngôi sao của VIA B, thay ổ bánh mì bằng hạt cốm xanh có bông lúa.
+>
+> ![VIA Bánh Mì và VIA Cốm](docs/images/logo-via-b-va-com.png)
 
 Repo này là nơi chung cho kiến trúc, kế hoạch, bộ dữ liệu và hệ mô phỏng của dự án.
 

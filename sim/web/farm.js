@@ -11,6 +11,7 @@ import * as THREE from './vendor/three.module.min.js';
 import { mulberryPlant, mulberryLeaf, PALETTE } from './mulberry.js';
 import { lemonPlant, leafClump, fruitColor, RIPE_AT } from './lemon.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
+import { attachArm, POSES, JOINTS } from './so101.js';
 
 const params = new URLSearchParams(location.search);
 const MAP_URL = params.get('map') || '../maps/lang_maker_v1.json';
@@ -251,13 +252,15 @@ function drawLemons(list) {
 const robot = { x: 0, y: 0, theta: 0, v: 0, w: 0, cmdV: 0, cmdW: 0, cmdAt: -1, body: new THREE.Group() };
 
 // Robot VIA C phần cứng v0.1: đế 2 bánh v2.0 + cột nâng 12 cm + tay SO-101 (docs/HARDWARE-v0.1.md).
-// Mô hình nằm trong models/via_c_v0_1.glb, đã đổi sang trục three (y lên trên, mũi robot theo +x).
-// Gốc mô hình ở tâm trục bánh, đáy bánh thấp hơn gốc 6,8 cm nên nâng lên cho chạm đất.
+// Mô hình nằm trong models/via_c_v0_1_khop.glb, đã đổi sang trục three (y lên trên, mũi robot theo +x),
+// 6 khớp SO-101 xoay được (so101.js). Gốc mô hình ở tâm trục bánh, đáy bánh thấp hơn gốc 6,8 cm nên nâng lên.
+let arm = null;
 function buildRobot() {
   const g = robot.body;
-  new GLTFLoader().load('models/via_c_v0_1.glb', (gltf) => {
+  new GLTFLoader().load('models/via_c_v0_1_khop.glb', (gltf) => {
     gltf.scene.position.y = ROBOT.groundOffset;
     g.add(gltf.scene);
+    arm = attachArm(gltf.scene); arm.snap(POSES.san_sang); window.__sim.arm = arm;
   }, undefined, (e) => console.warn('Không nạp được mô hình robot', e));
   robotCam.rotation.order = 'YXZ';
   robotCam.rotation.set(-ROBOT.camTilt, -Math.PI / 2, 0); // nhìn theo +x của robot
@@ -279,7 +282,13 @@ function blocked(x, y) {
 }
 
 const keys = {};
-addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; if (e.key.toLowerCase() === 'c') topView = !topView; if (e.key.toLowerCase() === 'r') resetRobot(); });
+const ARM_KEYS = { 1: 'san_sang', 2: 'vuon_hai', 3: 'gap' };
+addEventListener('keydown', (e) => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key.toLowerCase() === 'c') topView = !topView;
+  if (e.key.toLowerCase() === 'r') resetRobot();
+  if (arm && ARM_KEYS[e.key]) arm.command(POSES[ARM_KEYS[e.key]]);
+});
 addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 let topView = params.get('view') === 'top';
 let simTime = 0;
@@ -379,6 +388,12 @@ function connect() {
   ws.onmessage = (ev) => {
     let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
     const clip = (x, a) => Math.max(-a, Math.min(a, Number(x) || 0));
+    if (m.arm && arm) { // lệnh tay: {"arm": {"shoulder_pan": 0.2, ...}} theo radian,
+      const a = {};      // hoặc khoá kiểu LeRobot "shoulder_pan.pos" theo độ
+      for (const [k, v] of Object.entries(m.arm)) a[k.endsWith('.pos') ? k.slice(0, -4) : k] = k.endsWith('.pos') ? Number(v) * Math.PI / 180 : Number(v);
+      arm.command(a);
+    }
+    if (!('linear' in m || 'angular' in m || 'left' in m || 'right' in m || 'throttle' in m || 'steering' in m)) return;
     if ('linear' in m || 'angular' in m) { robot.cmdV = clip(m.linear, ROBOT.vMax); robot.cmdW = clip(m.angular, ROBOT.wMax); }
     else if ('left' in m || 'right' in m) { // tốc độ hai bánh, -1..1
       const l = clip(m.left, 1) * ROBOT.vMax, r = clip(m.right, 1) * ROBOT.vMax;
@@ -391,6 +406,7 @@ function connect() {
 }
 
 let lastSend = 0, lastLabels = [];
+const _tip = new THREE.Vector3();
 function publish() {
   grabCamera();
   lastLabels = fruitLabels();
@@ -403,6 +419,11 @@ function publish() {
     tags: seenTags(),
     labels: lastLabels,
   };
+  if (arm) {
+    msg.arm = Object.fromEntries(JOINTS.map((j) => [j.name, +arm.q[j.name].toFixed(4)]));
+    const t = arm.tipWorld(_tip); // đầu kẹp theo toạ độ vườn (x, y trên mặt đất, z lên trên)
+    msg.gripper_tip = [+t.x.toFixed(3), +(-t.z).toFixed(3), +t.y.toFixed(3)];
+  }
   window.__sim.last = msg;
   if (wsOk && ws.readyState === 1) ws.send(JSON.stringify(msg));
 }
@@ -420,6 +441,7 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   simTime += dt;
   stepRobot(dt);
+  if (arm) arm.step(dt);
   robot.body.updateMatrixWorld(true);
   if (simTime - lastSend >= 1 / SEND_HZ) { lastSend = simTime; publish(); }
   if (topView) { viewCam.position.copy(P(robot.x, robot.y, 9)); viewCam.up.set(1, 0, 0); viewCam.lookAt(P(robot.x, robot.y, 0)); }

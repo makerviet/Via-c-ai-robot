@@ -160,13 +160,53 @@ def spiral_arm(curl=0.22, tilt=0.35, n=22, length=0.42, w0=0.05, w1=0.008, lemon
     if lemon: out += lemon_at(np.mean(np.array([s.centroid for s in segs[n // 3:]]), axis=0))
     return out
 
+def build_khop(out, base_stl, D, base_target=60000, arm_ratio=0.25):
+    """Mô hình có khớp cho nông trang ảo: mỗi khâu SO-101 là một nút riêng tên `so101_<khâu>`,
+    lồng nhau theo URDF. Trang web chỉ cần đặt rotation.z của nút khâu con bằng góc khớp (rad)."""
+    U = ET.parse(D + 'so101_new_calib.urdf').getroot()
+    sc = trimesh.Scene()
+    g = sc.graph; root = 'via_c'
+    g.update(frame_from=sc.graph.base_frame, frame_to=root, matrix=rotation_matrix(-np.pi / 2, [1, 0, 0]))
+    base = trimesh.load(base_stl); groups = {}
+    for c in base.split(only_watertight=False):
+        groups.setdefault(classify(c), []).append(c)
+    total = len(base.faces)
+    for k, cs in groups.items():
+        m = trimesh.util.concatenate(cs)
+        if len(m.faces) > 12000: m = dec(m, max(12000, int(base_target * len(m.faces) / total)))
+        m.visual = trimesh.visual.TextureVisuals(material=mat(COL[k], 0.5 if k != 'wheel' else 0.9))
+        sc.add_geometry(m, node_name='base_' + k, geom_name='base_' + k, parent_node_name=root)
+    r = trimesh.creation.box([0.04, 0.04, RISER]); r.apply_translation([MOUNT_X, 0, TOP + RISER / 2])
+    p = trimesh.creation.box([0.12, 0.09, 0.006]); p.apply_translation([MOUNT_X + 0.01, 0, TOP + RISER + 0.003])
+    f = trimesh.creation.box([0.08, 0.08, 0.006]); f.apply_translation([MOUNT_X, 0, TOP + 0.003])
+    rm = trimesh.util.concatenate([r, p, f]); rm.visual = trimesh.visual.TextureVisuals(material=mat(COL['riser'], 0.4, 0.3))
+    sc.add_geometry(rm, node_name='riser', geom_name='riser', parent_node_name=root)
+    M0 = np.eye(4); M0[:3, 3] = [MOUNT_X, 0, TOP + RISER + 0.006 + 0.0024]
+    g.update(frame_from=root, frame_to='so101_base_link', matrix=M0)
+    for j in U.findall('joint'):  # nút khớp mang gốc toạ độ cố định, nút khâu con xoay quanh z
+        pa, ch = 'so101_' + j.find('parent').get('link'), 'so101_' + j.find('child').get('link')
+        g.update(frame_from=pa, frame_to='khop_' + j.get('name'), matrix=T(j.find('origin')))
+        g.update(frame_from='khop_' + j.get('name'), frame_to=ch, matrix=np.eye(4))
+    cache = {}
+    for l in U.findall('link'):
+        for i, v in enumerate(l.findall('visual')):
+            fn = v.find('geometry/mesh').get('filename'); mt = v.find('material')
+            if fn not in cache:
+                m = trimesh.load(D + fn); cache[fn] = dec(m, max(500, int(len(m.faces) * arm_ratio)))
+            m = cache[fn].copy()
+            servo = mt is not None and mt.get('name') == 'sts3215'
+            m.visual = trimesh.visual.TextureVisuals(material=mat(COL['servo'] if servo else COL['printed'], 0.55))
+            name = f"hinh_{l.get('name')}_{i}"
+            sc.add_geometry(m, node_name=name, geom_name=name, parent_node_name='so101_' + l.get('name'), transform=T(v.find('origin')))
+    sc.export(out)
+
 POSES = {  # góc khớp (rad) cho ba tư thế mẫu
     'via_c_v0_1':     dict(shoulder_lift=-0.25, elbow_flex=0.95, wrist_flex=0.75, gripper=0.15),             # sẵn sàng
     'via_c_v0_1_hai': dict(shoulder_pan=0.25, shoulder_lift=0.55, elbow_flex=-0.2, wrist_flex=0.35, gripper=0.9),  # vươn hái
     'via_c_v0_1_gap': dict(shoulder_lift=-1.7, elbow_flex=1.65, wrist_flex=0.8, gripper=0),                   # gập khi di chuyển
-    'via_c_v0_1_tay_mem': dict(xoan=dict(curl=0.3, tilt=0.75, w0=0.055, lemon=True)),                                  # tay mềm xoắn ôm quả
-    'via_c_v0_1_dau_xoan': dict(shoulder_lift=0.35, elbow_flex=0.1, wrist_flex=0.9,                                     # đầu xoắn nhỏ trên SO-101
-                                dau_xoan=dict(sign=-1, curl=0.42, n=16, length=0.16, w0=0.024, w1=0.005, lemon=0.8)),
+    # Tay mềm xoắn tạm gác (docs/TAY-MEM-XOAN.md). Tư thế mẫu nếu cần dựng lại:
+    #   dict(xoan=dict(curl=0.3, tilt=0.75, w0=0.055, lemon=True))
+    #   dict(shoulder_lift=0.35, elbow_flex=0.1, wrist_flex=0.9, dau_xoan=dict(sign=-1, curl=0.42, n=16, length=0.16, w0=0.024, w1=0.005, lemon=0.8))
 }
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
@@ -174,5 +214,6 @@ if __name__ == '__main__':
     ap.add_argument('--so101', required=True, help='thư mục Simulation/SO101 của repo TheRobotStudio/SO-ARM100')
     ap.add_argument('--out', default='sim/web/models')
     a = ap.parse_args()
+    build_khop(f'{a.out}/via_c_v0_1_khop.glb', a.base, a.so101.rstrip('/') + '/')
     for name, q in POSES.items():
         print(name, build(q, f'{a.out}/{name}.glb', a.base, a.so101.rstrip('/') + '/'))

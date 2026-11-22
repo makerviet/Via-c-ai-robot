@@ -14,12 +14,13 @@
 </head>
 <body>
 <div id="hud"><img src="favicon.png" alt=""><b>VIA C · phần cứng v0.1</b><br>
-Đế 2 bánh (bản v2.0) · cột nâng 12 cm · tay SO-101 6 bậc hoặc tay mềm xoắn.<br>
-<small>Kéo chuột để xoay, cuộn để phóng to. Phím 1–3 đổi tư thế tay SO-101, phím 4 tay mềm xoắn, phím 5 đầu xoắn trên SO-101.</small></div>
+Đế 2 bánh (bản v2.0) · cột nâng 12 cm · tay SO-101 6 bậc.<br>
+<small>Kéo chuột để xoay, cuộn để phóng to. Phím 1 sẵn sàng, 2 vươn hái, 3 gập.</small></div>
 <script type="module">
 import * as THREE from './vendor/three.module.min.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { OrbitControls } from './vendor/OrbitControls.js';
+import { attachArm, POSES } from './so101.js';
 const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 r.setPixelRatio(devicePixelRatio); r.setSize(innerWidth, innerHeight);
 r.shadowMap.enabled = true; document.body.appendChild(r.domElement);
@@ -35,19 +36,19 @@ sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -1,
 const ground = new THREE.Mesh(new THREE.CircleGeometry(1.6, 64), new THREE.MeshStandardMaterial({ color: 0xe9e1c7 }));
 ground.rotation.x = -Math.PI / 2; ground.position.y = -0.068; ground.receiveShadow = true; scene.add(ground);
 const grid = new THREE.GridHelper(2, 20, 0xcfc39f, 0xdcd2b2); grid.position.y = -0.0675; scene.add(grid);
-const loader = new GLTFLoader(); let current;
-function load(name) {
-  loader.load(`models/${name}.glb`, g => {
-    if (current) scene.remove(current);
-    current = g.scene; current.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
-    scene.add(current); window.__ready = true;
-  });
-}
-const poses = { 1: 'via_c_v0_1', 2: 'via_c_v0_1_hai', 3: 'via_c_v0_1_gap', 4: 'via_c_v0_1_tay_mem', 5: 'via_c_v0_1_dau_xoan' };
-load(poses[new URLSearchParams(location.search).get('pose')] || poses[1]);
-addEventListener('keydown', e => poses[e.key] && load(poses[e.key]));
+const poses = { 1: 'san_sang', 2: 'vuon_hai', 3: 'gap' };
+let arm;
+new GLTFLoader().load('models/via_c_v0_1_khop.glb', g => {
+  g.scene.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
+  scene.add(g.scene);
+  arm = attachArm(g.scene);
+  arm.snap(POSES[poses[new URLSearchParams(location.search).get('pose')] || 'san_sang']);
+  window.__arm = arm; window.__ready = true;
+});
+addEventListener('keydown', e => arm && poses[e.key] && arm.command(POSES[poses[e.key]]));
+let last = performance.now();
 addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); r.setSize(innerWidth, innerHeight); });
-r.setAnimationLoop(() => r.render(scene, cam));
+r.setAnimationLoop((t) => { const dt = Math.min(0.05, (t - last) / 1000); last = t; if (arm) arm.step(dt); r.render(scene, cam); });
 </script>
 </body>
 </html>

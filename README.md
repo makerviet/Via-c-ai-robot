@@ -29,6 +29,7 @@ Nông trang ảo giữ đúng cách kết nối của giả lập VIA B, nên b�
 | Tài liệu | Nội dung |
 | --- | --- |
 | [Kiến trúc tổng thể](docs/ARCHITECTURE.md) | Mô hình robot, tải từng tầng, đế đổi được, bo mạch hai phần, phần mềm ROS 2, mô phỏng và dữ liệu |
+| [Khung giải pháp v0](docs/KHUNG-GIAI-PHAP-v0.md) | Đế 2 bánh + tay SO-101 + nông trang ảo: các khối, giao diện chung, đường đi dữ liệu |
 | [Phần cứng v0.1](docs/HARDWARE-v0.1.md) | Bản ghép thử đế 2 bánh v2.0 với tay SO-101, mô hình 3D và URDF |
 | [Cổng công cụ VIA](docs/CONG-CONG-CU.md) | Chuẩn mở để thay nhanh đầu công cụ: tay mềm hái quả, đầu hái lá dâu, gieo hạt, laser |
 | [Kế hoạch 2026–2030](docs/ROADMAP-2026-2030.md) | Năm phiên bản v0–v4, lộ trình tay và đầu công cụ, hệ sinh thái mở |

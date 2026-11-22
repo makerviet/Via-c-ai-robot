@@ -8,6 +8,7 @@
 // toạ độ đi qua hàm P().
 
 import * as THREE from './vendor/three.module.min.js';
+import { mulberryPlant, mulberryLeaf, PALETTE } from './mulberry.js';
 
 const params = new URLSearchParams(location.search);
 const MAP_URL = params.get('map') || '../maps/lang_maker_v1.json';
@@ -45,7 +46,7 @@ const canvas = document.getElementById('view');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xcfe6f5);
+scene.background = new THREE.Color(PALETTE.skyHorizon);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a5a, 1.1));
 const sun = new THREE.DirectionalLight(0xfff2d6, 1.6);
 sun.position.set(6, 12, 4);
@@ -96,18 +97,18 @@ function tagTexture(id) {
 function buildFarm(map) {
   world.map = map;
   const [sx, sy] = map.size;
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(sx + 8, sy + 8), new THREE.MeshLambertMaterial({ color: 0x7a9a55 }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(sx + 8, sy + 8), new THREE.MeshLambertMaterial({ color: PALETTE.grass }));
   ground.rotation.x = -Math.PI / 2; scene.add(ground);
 
   for (const p of map.paths || []) { // lối đi nền cứng
     const [x0, y0] = p.from, [x1, y1] = p.to;
     const len = Math.hypot(x1 - x0, y1 - y0);
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(len + p.width, p.width), new THREE.MeshLambertMaterial({ color: 0xc9c2b2 }));
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(len + p.width, p.width), new THREE.MeshLambertMaterial({ color: PALETTE.path }));
     m.rotation.x = -Math.PI / 2; m.rotation.z = Math.atan2(y1 - y0, x1 - x0);
     m.position.copy(P((x0 + x1) / 2, (y0 + y1) / 2, 0.005)); scene.add(m);
   }
 
-  const trunks = [], leavesLemon = [], leavesMul = [], ripe = [], unripe = [], soil = [];
+  const trunks = [], leavesLemon = [], leavesMul = [], ripe = [], unripe = [], soil = [], mulberries = [];
   const r = rng(2026);
   for (const row of map.rows || []) {
     const [x0, y0] = row.start, [x1, y1] = row.end;
@@ -126,14 +127,17 @@ function buildFarm(map) {
           const fx = x + Math.cos(az) * Math.cos(el) * fr, fy = y + Math.sin(az) * Math.cos(el) * fr, fz = h + Math.sin(el) * fr;
           (r() > 0.35 ? ripe : unripe).push({ x: fx, y: fy, z: fz, r: 0.035 });
         }
-      } else { // dâu: bụi cao, nhiều tầng lá
-        trunks.push({ x, y, h: 0.5, r: 0.04 });
-        for (let j = 0; j < 3; j++) leavesMul.push({ x: x + (r() - 0.5) * 0.2, y: y + (r() - 0.5) * 0.2, z: 0.5 + j * 0.3, r: 0.30 + r() * 0.08 });
+      } else { // dâu: gốc đốn thấp, cành xoè, lá hình tim (kiểu vườn dâu BLUESILK)
+        const plant = mulberryPlant(r);
+        mulberries.push({ x, y, rot: r() * Math.PI * 2, plant });
+        world.obstacles.push({ x, y, r: 0.10 });
+        // vùng tán lá dùng để xét che khuất khi gắn nhãn quả
+        for (let j = 0; j < 2; j++) leavesMul.push({ x, y, z: 0.75 + j * 0.45, r: 0.32 });
       }
     }
   }
 
-  instanced(new THREE.BoxGeometry(1, 0.06, 0.5), 0x6b4f32, soil, (s, m) => {
+  instanced(new THREE.BoxGeometry(1, 0.06, 0.5), PALETTE.earthDark, soil, (s, m) => {
     m.compose(P(s.x, s.y, 0.03), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), s.a), new THREE.Vector3(s.len + 0.6, 1, 1));
   });
   instanced(new THREE.CylinderGeometry(1, 1, 1, 8), 0x6e5338, trunks, (t, m) => {
@@ -142,7 +146,7 @@ function buildFarm(map) {
   const ball = new THREE.IcosahedronGeometry(1, 1);
   const place = (s, m) => m.compose(P(s.x, s.y, s.z), new THREE.Quaternion(), new THREE.Vector3(s.r, s.r, s.r));
   instanced(ball, 0x2f6b2c, leavesLemon, place);
-  instanced(ball, 0x4f9a3a, leavesMul, place);
+  drawMulberries(mulberries);
   instanced(new THREE.SphereGeometry(1, 10, 8), 0xf3d32b, ripe, place);
   instanced(new THREE.SphereGeometry(1, 10, 8), 0x8fc43a, unripe, place);
 
@@ -164,6 +168,41 @@ function buildFarm(map) {
     world.tags.push({ id: t.id, x, y });
   }
   document.getElementById('mapname').textContent = map.name || '';
+}
+
+// Vẽ cả vườn dâu bằng 4 InstancedMesh: đoạn cành, u gốc, lá, quả.
+function drawMulberries(list) {
+  if (!list.length) return;
+  const segs = [], knobs = [], leaves = [], fruits = [];
+  const m = new THREE.Matrix4(), base = new THREE.Matrix4(), q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0), d = new THREE.Vector3(), v = new THREE.Vector3(), s = new THREE.Vector3();
+  for (const it of list) {
+    base.compose(P(it.x, it.y, 0.06), q.setFromAxisAngle(up, it.rot), s.set(1, 1, 1));
+    for (const g of it.plant.segs) segs.push({ g, base: base.clone() });
+    for (const k of it.plant.knobs) knobs.push({ k, base: base.clone() });
+    for (const l of it.plant.leaves) leaves.push({ l, base: base.clone() });
+    for (const f of it.plant.fruits) fruits.push({ f, base: base.clone() });
+  }
+  const mat = opts => new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9, metalness: 0, ...opts });
+  const fill = (geo, material, items, place, cast = true) => {
+    const mesh = new THREE.InstancedMesh(geo, material, items.length);
+    const c = new THREE.Color();
+    items.forEach((it, i) => { place(it, m); mesh.setMatrixAt(i, m); mesh.setColorAt(i, c.set(it.color)); });
+    mesh.castShadow = cast; scene.add(mesh); return mesh;
+  };
+  // cành: trụ đơn vị (cao 1, từ y=0 tới y=1) kéo giữa hai điểm, thon dần
+  const rod = new THREE.CylinderGeometry(0.6, 1, 1, 5); rod.translate(0, 0.5, 0);
+  fill(rod, mat({}), segs.map(x => ({ ...x, color: x.g.color })), (x, out) => {
+    const a = new THREE.Vector3(...x.g.p0), b = new THREE.Vector3(...x.g.p1);
+    d.subVectors(b, a); const len = d.length();
+    out.compose(a, new THREE.Quaternion().setFromUnitVectors(up, d.normalize()), v.set(x.g.r0, len, x.g.r0)).premultiply(x.base);
+  });
+  fill(new THREE.IcosahedronGeometry(1, 0), mat({}), knobs.map(x => ({ ...x, color: x.k.color })), (x, out) =>
+    out.compose(new THREE.Vector3(...x.k.p), q.identity(), v.setScalar(x.k.s)).premultiply(x.base));
+  fill(mulberryLeaf(), mat({ vertexColors: true, roughness: 0.42, side: THREE.DoubleSide }), leaves.map(x => ({ ...x, color: x.l.color })), (x, out) =>
+    out.compose(new THREE.Vector3(...x.l.p), x.l.q, v.setScalar(x.l.s)).premultiply(x.base));
+  fill(new THREE.IcosahedronGeometry(1, 1), mat({ roughness: 0.6 }), fruits.map(x => ({ ...x, color: x.f.color })), (x, out) =>
+    out.compose(new THREE.Vector3(...x.f.p), q.identity(), v.set(0.016, 0.027, 0.016)).premultiply(x.base));
 }
 
 // ---------------------------------------------------------------- robot

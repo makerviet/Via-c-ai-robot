@@ -64,6 +64,10 @@ python tools/run_sim.py --map ../maps/ten_ban_do.json
 
 Số đo trong `lang_maker_v1.json` là giả định, cần thay bằng số đo thật ở Làng Maker.
 
+### Kiểu cây dâu
+
+Cây dâu lấy kiểu dáng từ vườn dâu nuôi tằm của dự án [BLUESILK VR](https://github.com/tuanln/bluesilk-vr): gốc đốn thấp sát đất, 5–7 cành mảnh xoè như bình hoa, lá to hình tim mép răng cưa mọc so le, ngọn có lá non, vài quả dâu tím. Nền vườn dùng cùng bảng màu pastel. Mã ở `sim/web/mulberry.js`. Cả vườn dâu chỉ vẽ bằng 4 lớp hình lặp lại (cành, u gốc, lá, quả), nên máy yếu vẫn chạy được.
+
 ## Nối với ROS 2
 
 ```bash

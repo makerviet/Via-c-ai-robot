@@ -8,7 +8,7 @@ Bản ghép thử 22/11/2026: đế 2 bánh **v2.0** (thiết kế Onshape của
 | --- | --- |
 | ![Mặt trước](images/via-c-v0-1-mat-truoc.png) | ![Mặt bên, tay vươn ra trước](images/via-c-v0-1-vuon-hai.png) |
 
-Xem và xoay mô hình 3D: chạy `python tools/run_sim.py` rồi mở `http://localhost:8000/web/robot.html` (phím 1, 2, 3 đổi tư thế tay SO-101, phím 4 xem tay mềm xoắn).
+Xem và xoay mô hình 3D: chạy `python tools/run_sim.py` rồi mở `http://localhost:8000/web/robot.html` (phím 1, 2, 3 đổi tư thế tay SO-101, phím 4 tay mềm xoắn, phím 5 đầu xoắn nhỏ trên SO-101).
 
 ## Thông số đo từ file 3D
 
@@ -52,6 +52,40 @@ Vì sao hợp với VIA Cốm:
 
 Giới hạn: tay mềm không định vị chính xác như SO-101, và cần lưỡi cắt cuống hoặc động tác xoay để tách quả. Mô hình trên là hình học tự dựng theo nguyên lý, chưa phải thiết kế để in.
 
+### Đầu xoắn nhỏ gắn trên cổ tay SO-101
+
+![Đầu xoắn nhỏ trên SO-101 ôm quả chanh cùng ngàm cố định](images/via-c-v0-1-dau-xoan-can.png)
+
+| Cả robot |
+| --- |
+| ![SO-101 mang đầu xoắn nhỏ](images/via-c-v0-1-dau-xoan.png) |
+
+Cùng nguyên lý nhưng thu nhỏ để thay **ngàm động** của SO-101: 16 đốt, dài 16 cm, gốc 2,4 cm, ngọn 0,5 cm. Cáp cuốn vào trục servo kẹp sẵn có của SO-101, nên không thêm động cơ. Khi kéo cáp, đầu xoắn cuộn về phía **ngàm cố định** và ôm quả vào giữa: ngàm cứng giữ vị trí, phần xoắn mềm ôm theo cỡ quả.
+
+Khối lượng (ước tính, chưa cân thật):
+
+| Phần | Khối lượng |
+| --- | --- |
+| Đầu xoắn in TPU, đặc 60% (thể tích đặc 26 cm³) | khoảng 19 g |
+| Cáp và ống cuốn cáp | khoảng 5 g |
+| Bỏ ngàm động SO-101 | trừ 12 g |
+| **Đầu công cụ tăng thêm** | **khoảng 12 g** |
+| Quả chanh ta (hiểu biết chung) | 40–80 g |
+
+Tải ở khớp vai (tính từ khối lượng các khâu trong mô hình SO-101):
+
+| Tư thế | Mô-men vai, chưa có quả | Có thêm 100 g ở đầu |
+| --- | --- | --- |
+| Tư thế hái trong ảnh (đầu cách vai 22 cm) | 0,55 N·m | 0,77 N·m |
+| Duỗi thẳng ngang, xa nhất (41 cm) | 0,86 N·m | 1,27 N·m |
+
+Servo STS3215 bản 12 V có mô-men giữ khoảng 2,9 N·m, bản 7,4 V khoảng 1,9 N·m (số của hãng, hiểu biết chung). Nếu chỉ dùng một nửa mô-men giữ để servo không nóng:
+
+- **Bản 12 V:** đủ cho đầu xoắn cộng một quả 100 g ở mọi tư thế, kể cả duỗi thẳng.
+- **Bản 7,4 V:** đủ ở tư thế hái gần (0,77 trên 0,95 N·m) nhưng không đủ khi duỗi thẳng hết tầm. Nên giữ quả trong vòng khoảng 25 cm quanh vai.
+
+Kết luận: đầu xoắn nhỏ nhẹ hơn ngàm gốc gần như không đáng kể, nên phần nặng là quả. SO-101 bản servo 12 V mang được, và đây là cách gắn hợp nhất cho bản v0: giữ độ chính xác của SO-101 và dữ liệu LeRobot, thêm độ mềm ở chỗ chạm quả.
+
 **Lưu ý giấy phép:** repo Open Spiral Robots dùng giấy phép PolyForm Noncommercial, cấm dùng cho mục đích thương mại nếu không có giấy phép riêng. VIA C không chép bản vẽ hay mã của repo đó vào đây. Nếu muốn dùng công cụ thiết kế hay file in của họ cho sản phẩm bán ra, cần liên hệ tác giả xin giấy phép thương mại.
 
 ## Khác với bản phác thảo
@@ -71,7 +105,7 @@ Giới hạn: tay mềm không định vị chính xác như SO-101, và cần l
 | `hardware/v0.1/via_c_v0_1.urdf` | Mô tả robot cho ROS 2, RViz, Gazebo, Isaac Sim: đế, camera trước, cột nâng, 6 khớp tay SO-101 |
 | `hardware/v0.1/meshes/` | Lưới 3D đã giảm chi tiết của đế v2.0 và các khâu SO-101 |
 | `hardware/v0.1/tao_mo_hinh.py` | Chương trình ghép lại mô hình khi đế hoặc vị trí cột thay đổi |
-| `sim/web/models/*.glb` | Mô hình có màu: 3 tư thế SO-101 (sẵn sàng, vươn hái, gập) và tay mềm xoắn |
+| `sim/web/models/*.glb` | Mô hình có màu: 3 tư thế SO-101 (sẵn sàng, vươn hái, gập), tay mềm xoắn, đầu xoắn nhỏ trên SO-101 |
 | `sim/web/robot.html` | Trang xem mô hình 3D |
 
 Tay SO-101 lấy từ repo [TheRobotStudio/SO-ARM100](https://github.com/TheRobotStudio/SO-ARM100), giấy phép Apache-2.0, bản sao giấy phép nằm ở `hardware/v0.1/meshes/so101/`.
@@ -82,5 +116,6 @@ Tay SO-101 lấy từ repo [TheRobotStudio/SO-ARM100](https://github.com/TheRobo
 - Camera chính: camera trước của đế (27 cm), thêm cột camera 0,75 m, hay thêm camera cổ tay của SO-101.
 - Có gắn lidar 2D cho bản v0 không, và gắn ở đâu để tay không che.
 - Đế v2.0 cần tách bánh thành khối riêng trong Onshape để mô phỏng bánh quay; bản xuất STL hiện gộp thành một khối.
-- Chọn tay cho bản v0: SO-101 (chính xác, có sẵn dữ liệu LeRobot) hay tay mềm xoắn (an toàn, rẻ, cần xin giấy phép nếu dùng bản vẽ gốc).
+- Chọn tay cho bản v0: SO-101 có ngàm gốc, SO-101 mang đầu xoắn nhỏ (đề xuất), hay tay mềm xoắn dài thay cả SO-101.
+- Mua servo STS3215 bản 12 V cho khớp vai và khuỷu để đủ tải khi duỗi xa.
 - Kiểm cân bằng: tay vươn hết tầm về trước khi đế chỉ có 2 bánh giữa và 4 chân đỡ.

@@ -15,7 +15,7 @@
 <body>
 <div id="hud"><img src="favicon.png" alt=""><b>VIA C · phần cứng v0.1</b><br>
 Đế 2 bánh (bản v2.0) · cột nâng 12 cm · tay SO-101 6 bậc hoặc tay mềm xoắn.<br>
-<small>Kéo chuột để xoay, cuộn để phóng to. Phím 1–3 đổi tư thế tay SO-101, phím 4 xem tay mềm xoắn.</small></div>
+<small>Kéo chuột để xoay, cuộn để phóng to. Phím 1–3 đổi tư thế tay SO-101, phím 4 tay mềm xoắn, phím 5 đầu xoắn trên SO-101.</small></div>
 <script type="module">
 import * as THREE from './vendor/three.module.min.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
@@ -26,9 +26,9 @@ r.shadowMap.enabled = true; document.body.appendChild(r.domElement);
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0xf4eedb);
 const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.01, 20);
 const view = new URLSearchParams(location.search).get('view') || 'quarter';
-const views = { quarter: [0.95, 0.75, 0.95], side: [0, 0.42, 1.25], front: [1.25, 0.42, 0], top: [0.01, 1.4, 0] };
+const views = { quarter: [0.95, 0.75, 0.95], side: [0, 0.42, 1.25], close: [0.4, 0.55, -0.42], front: [1.25, 0.42, 0], top: [0.01, 1.4, 0] };
 cam.position.set(...(views[view] || views.quarter));
-const ctl = new OrbitControls(cam, r.domElement); ctl.target.set(0.06, 0.3, 0); ctl.update();
+const ctl = new OrbitControls(cam, r.domElement); ctl.target.set(...(view === 'close' ? [0.27, 0.42, 0] : [0.06, 0.3, 0])); ctl.update();
 scene.add(new THREE.HemisphereLight(0xffffff, 0xb9a77f, 1.6));
 const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(1.5, 2.5, 1.2); sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -1, right: 1, top: 1, bottom: -1 }); scene.add(sun);
@@ -43,7 +43,7 @@ function load(name) {
     scene.add(current); window.__ready = true;
   });
 }
-const poses = { 1: 'via_c_v0_1', 2: 'via_c_v0_1_hai', 3: 'via_c_v0_1_gap', 4: 'via_c_v0_1_tay_mem' };
+const poses = { 1: 'via_c_v0_1', 2: 'via_c_v0_1_hai', 3: 'via_c_v0_1_gap', 4: 'via_c_v0_1_tay_mem', 5: 'via_c_v0_1_dau_xoan' };
 load(poses[new URLSearchParams(location.search).get('pose')] || poses[1]);
 addEventListener('keydown', e => poses[e.key] && load(poses[e.key]));
 addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); r.setSize(innerWidth, innerHeight); });

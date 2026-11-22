@@ -87,8 +87,19 @@ def build(q, out, base_stl, D, base_target=60000, arm_ratio=0.25):
             sc.add_geometry(m, node_name=name, geom_name=name)
         sc.apply_transform(trimesh.transformations.rotation_matrix(-np.pi/2,[1,0,0]))
         sc.export(out); return None, None
+    dx = q.pop('dau_xoan', None)
     W,P=parts(q, U)
     cache={}
+    if dx:  # đầu xoắn nhỏ thay ngàm động của SO-101, cáp cuốn vào trục servo kẹp sẵn có
+        J = M0 @ W['moving_jaw_so101_v1_link']; G = M0 @ W['gripper_link']; F = M0 @ W['gripper_frame_link']
+        d0 = F[:3, 3] - G[:3, 3]
+        segs, cab, vol = spiral_chain(J[:3, 3] + 0.01 * d0 / np.linalg.norm(d0), d0, dx.get('sign', 1) * J[:3, 2],
+                                      dx['curl'], dx['n'], dx['length'], dx['w0'], dx['w1'], sides=16)
+        for name, m, c in [('dau_xoan', trimesh.util.concatenate(segs), 0xF1ECDD), ('cap_dau_xoan', cab, 0x8A5A2B)] + \
+                (lemon_at(np.mean(np.array([x.centroid for x in segs[dx['n'] // 3:]]), axis=0), dx.get('lemon', 0.8)) if dx.get('lemon') else []):
+            m.visual = trimesh.visual.TextureVisuals(material=mat(c, 0.7)); sc.add_geometry(m, node_name=name, geom_name=name)
+        print(f"đầu xoắn: thể tích đặc {vol*1e6:.1f} cm3, ước {vol*1e6*1.2*0.6:.0f} g nếu in TPU đặc 60%")
+        P = [p for p in P if p[0] != 'moving_jaw_so101_v1_link']
     for i,(link,fn,M,mn) in enumerate(P):
         if fn not in cache:
             m=trimesh.load(D+fn); cache[fn]=dec(m,max(500,int(len(m.faces)*arm_ratio)))
@@ -103,46 +114,50 @@ def build(q, out, base_stl, D, base_target=60000, arm_ratio=0.25):
 def frustum(r0, r1, h, sides=24):
     return trimesh.creation.revolve([[0, 0], [r0, 0], [r1, h], [0, h]], sections=sides)
 
-def spiral_arm(curl=0.22, tilt=0.35, n=22, length=0.42, w0=0.05, w1=0.008, lemon=False):
-    """Tay mềm xoắn theo nguyên lý xoắn ốc logarit: mỗi đốt nhỏ hơn đốt trước một tỉ lệ q,
-    kéo cáp thì mọi khớp gập cùng một góc `curl`, nên cả tay cuộn thành đường xoắn ốc logarit.
-    Hình học tự dựng theo nguyên lý trong bài báo SpiRobs, không lấy mã hay bản vẽ của repo khác."""
-    out = []
-    top = TOP + RISER + 0.006
-    box = trimesh.creation.box([0.09, 0.08, 0.06]); box.apply_translation([MOUNT_X + 0.005, 0, top + 0.03])
-    out.append(('hop_keo_cap', box, 0x2F3A2A))  # hộp 3 động cơ cuộn cáp
+def spiral_chain(p0, d0, nrm, curl, n, length, w0, w1, sides=24):
+    """Chuỗi đốt xoắn ốc logarit: mỗi đốt nhỏ hơn đốt trước một tỉ lệ q, kéo cáp thì mọi khớp
+    gập cùng một góc `curl` quanh trục `nrm`, nên cả chuỗi cuộn thành đường xoắn ốc logarit.
+    Hình học tự dựng theo nguyên lý trong bài báo SpiRobs, không lấy mã hay bản vẽ của repo khác.
+    Trả về các đốt, 3 sợi cáp và thể tích đặc (m3) để ước khối lượng."""
     q = (w1 / w0) ** (1 / n)
     l0 = length * (1 - q) / (1 - q ** n)
-    pos = np.array([MOUNT_X + 0.05, 0.0, top + 0.035]); ang = tilt  # góc so với phương ngang, dương là chếch lên
-    segs = []; cables = [[], [], []]
+    pos = np.array(p0, float); d0 = np.array(d0, float) / np.linalg.norm(d0)
+    segs = []; cables = [[], [], []]; vol = 0.0
     for i in range(n):
         li, ri, rj = l0 * q ** i, w0 * q ** i / 2, w0 * q ** (i + 1) / 2
-        d = np.array([np.cos(ang), 0, np.sin(ang)])
-        m = frustum(ri, rj, li * 0.86)
-        # trục z của đốt quay theo hướng d
+        d = rotation_matrix(i * curl, nrm)[:3, :3] @ d0
+        m = frustum(ri, rj, li * 0.86, sides)
         R = trimesh.geometry.align_vectors([0, 0, 1], d); R[:3, 3] = pos
         m.apply_transform(R); segs.append(m)
+        vol += np.pi * li * 0.86 * (ri * ri + ri * rj + rj * rj) / 3
         for k in range(3):  # 3 sợi cáp chạy dọc mép đốt
             a = 2 * np.pi * k / 3
-            off = R[:3, :3] @ np.array([np.cos(a) * ri * 0.8, np.sin(a) * ri * 0.8, 0])
-            cables[k].append(pos + off)
-        pos = pos + d * li; ang -= curl
-    out.append(('tay_xoan', trimesh.util.concatenate(segs), 0xF1ECDD))
+            cables[k].append(pos + R[:3, :3] @ np.array([np.cos(a) * ri * 0.8, np.sin(a) * ri * 0.8, 0]))
+        pos = pos + d * li
     cab = []
     for c in cables:
         for a, b in zip(c[:-1], c[1:]):
             v = b - a; L = np.linalg.norm(v)
             if L < 1e-4: continue
-            cy = trimesh.creation.cylinder(radius=0.0012, height=L, sections=6)
+            cy = trimesh.creation.cylinder(radius=max(0.0006, w1 * 0.12), height=L, sections=6)
             T = trimesh.geometry.align_vectors([0, 0, 1], v / L); T[:3, 3] = (a + b) / 2; cy.apply_transform(T); cab.append(cy)
-    out.append(('cap_keo', trimesh.util.concatenate(cab), 0x8A5A2B))
-    if lemon:  # quả chanh nằm trong vòng cuộn, treo trên cuống
-        tip = pos
-        ctr = np.mean(np.array([s.centroid for s in segs[n // 3:]]), axis=0)
-        L = trimesh.creation.icosphere(subdivisions=3, radius=1.0); L.apply_scale([0.026, 0.026, 0.032])
-        L.apply_translation(ctr); out.append(('qua_chanh', L, 0xF2D52A))
-        st = trimesh.creation.cylinder(radius=0.0025, height=0.05, sections=6); st.apply_translation(ctr + [0, 0, 0.032 + 0.025])
-        out.append(('cuong_chanh', st, 0x6B5A3E))
+    return segs, trimesh.util.concatenate(cab), vol
+
+def lemon_at(ctr, scale=1.0):
+    L = trimesh.creation.icosphere(subdivisions=3, radius=1.0); L.apply_scale(np.array([0.026, 0.026, 0.032]) * scale)
+    L.apply_translation(ctr)
+    st = trimesh.creation.cylinder(radius=0.0025, height=0.05, sections=6); st.apply_translation(ctr + [0, 0, 0.032 * scale + 0.025])
+    return [('qua_chanh', L, 0xF2D52A), ('cuong_chanh', st, 0x6B5A3E)]
+
+def spiral_arm(curl=0.22, tilt=0.35, n=22, length=0.42, w0=0.05, w1=0.008, lemon=False):
+    """Tay mềm xoắn dài 42 cm thay cho SO-101, hộp 3 động cơ kéo cáp đặt trên đỉnh cột."""
+    out = []
+    top = TOP + RISER + 0.006
+    box = trimesh.creation.box([0.09, 0.08, 0.06]); box.apply_translation([MOUNT_X + 0.005, 0, top + 0.03])
+    out.append(('hop_keo_cap', box, 0x2F3A2A))
+    segs, cab, vol = spiral_chain([MOUNT_X + 0.05, 0.0, top + 0.035], [np.cos(tilt), 0, np.sin(tilt)], [0, 1, 0], curl, n, length, w0, w1)
+    out += [('tay_xoan', trimesh.util.concatenate(segs), 0xF1ECDD), ('cap_keo', cab, 0x8A5A2B)]
+    if lemon: out += lemon_at(np.mean(np.array([s.centroid for s in segs[n // 3:]]), axis=0))
     return out
 
 POSES = {  # góc khớp (rad) cho ba tư thế mẫu
@@ -150,6 +165,8 @@ POSES = {  # góc khớp (rad) cho ba tư thế mẫu
     'via_c_v0_1_hai': dict(shoulder_pan=0.25, shoulder_lift=0.55, elbow_flex=-0.2, wrist_flex=0.35, gripper=0.9),  # vươn hái
     'via_c_v0_1_gap': dict(shoulder_lift=-1.7, elbow_flex=1.65, wrist_flex=0.8, gripper=0),                   # gập khi di chuyển
     'via_c_v0_1_tay_mem': dict(xoan=dict(curl=0.3, tilt=0.75, w0=0.055, lemon=True)),                                  # tay mềm xoắn ôm quả
+    'via_c_v0_1_dau_xoan': dict(shoulder_lift=0.35, elbow_flex=0.1, wrist_flex=0.9,                                     # đầu xoắn nhỏ trên SO-101
+                                dau_xoan=dict(sign=-1, curl=0.42, n=16, length=0.16, w0=0.024, w1=0.005, lemon=0.8)),
 }
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)

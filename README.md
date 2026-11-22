@@ -28,8 +28,9 @@ Nông trang ảo giữ đúng cách kết nối của giả lập VIA B, nên b�
 
 | Tài liệu | Nội dung |
 | --- | --- |
-| [Kiến trúc tổng thể](docs/ARCHITECTURE.md) | Các tầng phần cứng, phần mềm ROS 2, mô phỏng và dữ liệu ghép với nhau thế nào |
-| [Kế hoạch 2026–2030](docs/ROADMAP-2026-2030.md) | Lộ trình 5 năm hướng tới ứng dụng thực tiễn |
+| [Kiến trúc tổng thể](docs/ARCHITECTURE.md) | Mô hình robot, tải từng tầng, đế đổi được, bo mạch hai phần, phần mềm ROS 2, mô phỏng và dữ liệu |
+| [Cổng công cụ VIA](docs/CONG-CONG-CU.md) | Chuẩn mở để thay nhanh đầu công cụ: tay mềm hái quả, đầu hái lá dâu, gieo hạt, laser |
+| [Kế hoạch 2026–2030](docs/ROADMAP-2026-2030.md) | Năm phiên bản v0–v4, lộ trình tay và đầu công cụ, hệ sinh thái mở |
 | [Bộ dữ liệu](docs/DATASET.md) | Quy cách và mục tiêu của bộ dữ liệu robot AI nông nghiệp Việt Nam |
 | [Mô phỏng](docs/SIMULATION.md) | Nông trang ảo, giao thức, cách nối với ROS 2 |
 | [Đóng góp](CONTRIBUTING.md) | Cách tham gia |

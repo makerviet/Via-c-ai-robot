@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+dataset/sessions/
+build/
+install/
+log/
+.DS_Store

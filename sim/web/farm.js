@@ -120,11 +120,11 @@ function buildFarm(map) {
       const x = x0 + (x1 - x0) * t + (r() - 0.5) * 0.08, y = y0 + (y1 - y0) * t + (r() - 0.5) * 0.08;
       if (row.crop === 'lemon') {
         // chanh: cây thấp hơn dâu, tán tròn sẫm, quả từ xanh ngả vàng theo độ chín
-        const plant = lemonPlant(r, { height: 0.95 + r() * 0.15 });
+        const plant = lemonPlant(r, { height: 0.4 + r() * 0.3 });
         const rot = r() * Math.PI * 2;
         lemons.push({ x, y, rot, plant });
-        world.obstacles.push({ x, y, r: 0.08 });
-        leavesLemon.push({ x, y, z: plant.crown.y, r: plant.crown.r * 0.95 });
+        world.obstacles.push({ x, y, r: 0.05 });
+        leavesLemon.push({ x, y, z: plant.crown.y + 0.06, r: plant.crown.r * 0.7 });
         const c = Math.cos(rot), sn = Math.sin(rot);
         for (const f of plant.fruits) { // đổi toạ độ quả từ hệ cục bộ của cây sang hệ ROS
           const [lx, ly, lz] = f.p; // three cục bộ: x, y lên, z

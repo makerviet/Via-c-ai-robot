@@ -66,11 +66,11 @@ Số đo trong `lang_maker_v1.json` là giả định, cần thay bằng số đ
 
 ### Kiểu cây dâu
 
-Cây dâu lấy kiểu dáng từ vườn dâu nuôi tằm của dự án [BLUESILK VR](https://github.com/tuanln/bluesilk-vr): gốc đốn thấp sát đất, 5–7 cành mảnh xoè như bình hoa, lá to hình tim mép răng cưa mọc so le, ngọn có lá non, vài quả dâu tím. Nền vườn dùng cùng bảng màu pastel. Mã ở `sim/web/mulberry.js`.
+Cây dâu lấy kiểu dáng từ vườn dâu nuôi tằm của dự án [BLUESILK VR](https://github.com/tuanln/bluesilk-vr): gốc đốn thấp sát đất, 5–7 cành mảnh xoè như bình hoa, lá to hình tim mép răng cưa mọc so le, ngọn có lá non, vài quả dâu tím. Nền vườn dùng cùng bảng màu pastel. Mã ở `sim/web/mulberry.js`. Cả vườn dâu chỉ vẽ bằng 4 lớp hình lặp lại (cành, u gốc, lá, quả), nên máy yếu vẫn chạy được.
 
 ### Kiểu cây chanh và độ chín
 
-Cây chanh cùng phong cách, thấp hơn cây dâu (ngọn khoảng 1,0–1,1 m so với 1,2–1,5 m): gốc ngắn, vài cành chạc, tán tròn gồm nhiều khối lá xanh sẫm. Mỗi quả có **độ chín** từ 0 tới 1, màu đi từ xanh non, qua xanh ngả vàng, tới vàng chín. Quả có độ chín từ 0,6 trở lên được gắn nhãn `lemon_ripe`, dưới mức đó là `lemon_unripe`; nhãn cũng gửi kèm con số độ chín để AI học phân biệt bằng màu. Mã ở `sim/web/lemon.js`. Cả vườn dâu chỉ vẽ bằng 4 lớp hình lặp lại (cành, u gốc, lá, quả), nên máy yếu vẫn chạy được.
+Cây chanh cùng phong cách, cao 0,4–0,7 m (cây dâu 1,2–1,5 m): thân ngắn, vài cành chạc, tán tròn gồm nhiều khối lá xanh sẫm. Quả luôn mọc trên cây: mỗi quả treo ở mặt ngoài một khối lá, có cuống nối vào tán. Mỗi quả có **độ chín** từ 0 tới 1, màu đi từ xanh non, qua xanh ngả vàng, tới vàng chín. Quả có độ chín từ 0,6 trở lên được gắn nhãn `lemon_ripe`, dưới mức đó là `lemon_unripe`; nhãn cũng gửi kèm con số độ chín để AI học phân biệt bằng màu. Mã ở `sim/web/lemon.js`.
 
 ## Nối với ROS 2
 
